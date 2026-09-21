@@ -1,6 +1,6 @@
 {
   "name": "brainstormform",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local web forms that let AI agents ask unlimited brainstorming questions.",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "files": [
     "bin",
     "src",
+    "skills",
     "examples",
     "README.md",
     "LICENSE"

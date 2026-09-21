@@ -1,5 +1,6 @@
 node_modules/
 brainstormform-*/
+.brainstormform/
 *.log
 *.tmp
 .DS_Store

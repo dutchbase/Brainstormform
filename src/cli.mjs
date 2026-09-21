@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { normalizeSpec, schemaText, guideText, VERSION, SpecError } from './schema.mjs';
 import {
   createSession,
@@ -8,11 +9,19 @@ import {
   waitForAnswers,
   stopSession,
   keepSession,
+  exportSession,
+  archiveSession,
+  archiveList,
+  gitCommit,
   listSessions,
   cleanupStale,
   sessionDir,
   readJson,
+  resolveOutDir,
 } from './session.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstormform', 'SKILL.md');
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -45,12 +54,33 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+async function readInput(source) {
+  if (source && source !== '-') return fsp.readFile(source, 'utf8');
+  if (!process.stdin.isTTY) return readStdin();
+  return null;
+}
+
 async function deliver(id, answers, meta) {
   let output = answers;
-  if (meta && meta.keep) {
-    const kept = await keepSession(id, answers);
-    output = kept.answers;
-    process.stderr.write('brainstormform: kept a copy at ' + kept.dir + '\n');
+  if (meta.out) {
+    const dest = resolveOutDir(meta, id);
+    const result = await exportSession(id, answers, dest);
+    output = result.answers;
+    process.stderr.write('brainstormform: wrote output to ' + result.dir + '\n');
+    if (meta.commit) {
+      const commit = gitCommit(result.dir, `brainstormform: ${meta.title || id}`);
+      if (!commit.ok) process.stderr.write('brainstormform: git commit failed: ' + commit.error + '\n');
+    }
+  }
+  if (meta.keep) {
+    const result = await keepSession(id, answers);
+    output = result.answers;
+    process.stderr.write('brainstormform: kept a copy at ' + result.dir + '\n');
+  }
+  if (meta.archive) {
+    const result = await archiveSession(id, answers);
+    output = result.answers;
+    process.stderr.write('brainstormform: archived at ' + result.dir + '\n');
   }
   await stopSession(id);
   print(output);
@@ -58,14 +88,8 @@ async function deliver(id, answers, meta) {
 
 async function cmdAsk(args) {
   const source = args._[0];
-  let raw;
-  if (source && source !== '-') {
-    raw = await fsp.readFile(source, 'utf8');
-  } else if (!process.stdin.isTTY) {
-    raw = await readStdin();
-  } else {
-    return fail('no input: pass a questions file, or pipe JSON on stdin.');
-  }
+  const raw = await readInput(source);
+  if (raw === null) return fail('no input: pass a questions file, or pipe JSON on stdin.');
 
   let spec;
   try {
@@ -75,18 +99,26 @@ async function cmdAsk(args) {
     throw err;
   }
 
-  const keep = args.keep === true;
+  const options = {
+    keep: args.keep === true,
+    out: args.out === undefined ? false : args.out === true ? true : String(args.out),
+    commit: args.commit === true,
+    archive: args.archive === true,
+    onSubmit: args['on-submit'] ? String(args['on-submit']) : undefined,
+  };
   const open = args['no-open'] !== true;
   const idleTimeout = args['idle-timeout'] !== undefined ? Number(args['idle-timeout']) : undefined;
   const maxUpload = args['max-upload'] !== undefined ? Number(args['max-upload']) : undefined;
 
-  const { id } = await createSession(spec, { keep });
+  const { id } = await createSession(spec, options);
   const meta = await startDetachedServer(id, { open, idleTimeout, maxUpload });
 
   print({ sessionId: id, url: meta.url, pid: meta.pid });
   process.stderr.write(
-    'brainstormform: form is live. Ask the user to submit, then run:\n' +
-      '  brainstormform wait ' + id + ' --timeout 600\n',
+    'brainstormform: form is live. The user can answer at their own pace.\n' +
+      '  add follow-ups:  brainstormform add ' + id + ' fragment.json\n' +
+      '  read progress:   brainstormform progress ' + id + '\n' +
+      '  wait for finish: brainstormform wait ' + id + ' --timeout 600\n',
   );
   return 0;
 }
@@ -116,8 +148,80 @@ async function cmdGet(args) {
     await deliver(id, answers, meta);
     return 0;
   }
-  print({ status: 'pending', sessionId: id, url: meta.url });
+  print({ status: meta.status || 'open', sessionId: id, url: meta.url });
   return 4;
+}
+
+async function cmdProgress(args) {
+  const id = args._[0];
+  if (!id) return fail('usage: brainstormform progress <sessionId>');
+  const dir = sessionDir(id);
+  const meta = await readJson(path.join(dir, 'meta.json'), null);
+  if (!meta) return fail('unknown session "' + id + '".', 1);
+  const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, skipped: [] };
+  const final = await readJson(path.join(dir, 'answers.json'), null);
+  print({
+    sessionId: id,
+    status: meta.status || (final ? 'submitted' : 'open'),
+    revision: meta.revision,
+    url: meta.url,
+    answered: Object.keys(progress.answers || {}).length,
+    answers: (final && final.answers) || progress.answers || {},
+    other: progress.other || {},
+    skipped: progress.skipped || [],
+  });
+  return 0;
+}
+
+async function cmdAdd(args) {
+  const id = args._[0];
+  if (!id) return fail('usage: brainstormform add <sessionId> <fragment.json|->');
+  const raw = await readInput(args._[1]);
+  if (raw === null) return fail('no fragment: pass a JSON file, or pipe JSON on stdin.');
+  let fragment;
+  try {
+    fragment = JSON.parse(raw);
+  } catch (err) {
+    return fail('invalid fragment JSON: ' + err.message);
+  }
+  const meta = await readJson(path.join(sessionDir(id), 'meta.json'), null);
+  if (!meta) return fail('unknown session "' + id + '".', 1);
+  if (!meta.url) return fail('session has no live url (it may have exited).', 5);
+
+  let res;
+  try {
+    res = await fetch(meta.url + '/api/append', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(fragment),
+    });
+  } catch (err) {
+    return fail('could not reach the session: ' + err.message, 5);
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) return fail(body.error || 'append failed (HTTP ' + res.status + ')', res.status === 409 ? 4 : 1);
+  print(body);
+  return 0;
+}
+
+async function cmdExport(args) {
+  const id = args._[0];
+  if (!id) return fail('usage: brainstormform export <sessionId> --to <dir>');
+  const dir = sessionDir(id);
+  const answers = await readJson(path.join(dir, 'answers.json'), null);
+  if (!answers) return fail('session "' + id + '" has no submitted answers yet.', 4);
+  const dest = args.to ? path.resolve(String(args.to)) : path.join(process.cwd(), `.brainstormform/${id}`);
+  const result = await exportSession(id, answers, dest);
+  print({ dir: result.dir, answers: result.answers });
+  return 0;
+}
+
+async function cmdArchive(args) {
+  if (args._[0] === 'list' || args.list) {
+    print(await archiveList());
+    return 0;
+  }
+  return fail('usage: brainstormform archive list');
 }
 
 async function cmdList() {
@@ -139,21 +243,74 @@ async function cmdCleanup() {
   return 0;
 }
 
+function skillRoots() {
+  const home = os.homedir();
+  return {
+    agents: path.join(home, '.agents', 'skills'),
+    opencode: path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'opencode', 'skills'),
+    claude: path.join(home, '.claude', 'skills'),
+  };
+}
+
+async function cmdInstallSkill(args) {
+  if (args.list) {
+    print(skillRoots());
+    return 0;
+  }
+  try {
+    await fsp.access(SKILL_SRC);
+  } catch {
+    return fail('bundled skill not found at ' + SKILL_SRC);
+  }
+  const roots = skillRoots();
+  const installed = [];
+
+  if (args.dir) {
+    const dest = path.resolve(String(args.dir), 'brainstormform', 'SKILL.md');
+    await fsp.mkdir(path.dirname(dest), { recursive: true });
+    await fsp.copyFile(SKILL_SRC, dest);
+    installed.push(dest);
+    print({ installed, restart: 'Restart your agent so it picks up the new skill.' });
+    return 0;
+  }
+
+  const requested = args.target ? String(args.target) : 'all';
+  const names = requested === 'all' ? Object.keys(roots) : requested.split(',').map((s) => s.trim());
+
+  for (const name of names) {
+    const root = roots[name];
+    if (!root) return fail('unknown skill target "' + name + '". Use agents, opencode, claude or all.');
+    const dest = path.join(root, 'brainstormform', 'SKILL.md');
+    await fsp.mkdir(path.dirname(dest), { recursive: true });
+    await fsp.copyFile(SKILL_SRC, dest);
+    installed.push(dest);
+  }
+
+  print({ installed, restart: 'Restart your agent so it picks up the new skill.' });
+  return 0;
+}
+
 function helpText() {
-  return `brainstormform ${VERSION} — local web forms for agent brainstorming
+  return `brainstormform ${VERSION} — live local web forms for agent brainstorming
 
 Usage:
   brainstormform ask [questions.json|-] [--open|--no-open] [--keep]
-                     [--idle-timeout seconds] [--max-upload MB]
-  brainstormform wait <sessionId> [--timeout seconds]   # blocks, prints answers JSON
-  brainstormform get <sessionId>                         # non-blocking poll
+                     [--out [dir]] [--commit] [--archive]
+                     [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
+  brainstormform progress <id>                 # current draft answers + status
+  brainstormform add <id> <fragment.json|->    # append questions to a live form
+  brainstormform wait <id> [--timeout s]       # block until the user presses Finish
+  brainstormform get <id>                      # non-blocking poll
+  brainstormform export <id> --to <dir>        # materialise a finished session
+  brainstormform archive list
+  brainstormform install-skill [--target agents|opencode|claude|all]
   brainstormform list | stop <id> | cleanup
   brainstormform schema | guide | mcp | version
 
-ask reads a JSON spec (file or stdin), opens a form in the browser, and prints
-{"sessionId","url","pid"}. Then call "wait <sessionId>" to receive the answers.
-Answers are deleted once read unless --keep copies them to ./brainstormform-<id>/.
-Run "brainstormform guide" for the full question format.
+ask prints {"sessionId","url","pid"}. Answers are saved to the server as the user
+types, so "progress" reflects live input and "add" can append follow-up questions
+while the user is still answering. "wait" resolves only when the user finishes.
+Run "brainstormform guide" for the question format.
 `;
 }
 
@@ -168,6 +325,16 @@ export async function main(argv) {
       return cmdWait(args);
     case 'get':
       return cmdGet(args);
+    case 'progress':
+      return cmdProgress(args);
+    case 'add':
+      return cmdAdd(args);
+    case 'export':
+      return cmdExport(args);
+    case 'archive':
+      return cmdArchive(args);
+    case 'install-skill':
+      return cmdInstallSkill(args);
     case 'list':
       return cmdList();
     case 'stop':

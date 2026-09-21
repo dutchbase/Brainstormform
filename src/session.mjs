@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,8 +17,25 @@ export function sessionsRoot() {
   return path.join(base, 'brainstormform');
 }
 
+export function stateRoot() {
+  const base = process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state');
+  return path.join(base, 'brainstormform');
+}
+
 export function sessionDir(id) {
   return path.join(sessionsRoot(), id);
+}
+
+export function metaPath(id) {
+  return path.join(sessionDir(id), 'meta.json');
+}
+
+export function answersPath(id) {
+  return path.join(sessionDir(id), 'answers.json');
+}
+
+export function progressPath(id) {
+  return path.join(sessionDir(id), 'progress.json');
 }
 
 export function newSessionId() {
@@ -53,7 +70,7 @@ export async function writeJsonAtomic(file, value) {
   await fsp.rename(tmp, file);
 }
 
-export async function createSession(spec, { keep } = {}) {
+export async function createSession(spec, { keep, out, commit, archive, onSubmit } = {}) {
   const id = newSessionId();
   const dir = sessionDir(id);
   await fsp.mkdir(path.join(dir, 'uploads'), { recursive: true });
@@ -61,7 +78,15 @@ export async function createSession(spec, { keep } = {}) {
   await writeJsonAtomic(path.join(dir, 'meta.json'), {
     id,
     token: newToken(),
+    title: spec.title,
     keep: keep === true,
+    out: out === undefined || out === false ? false : out === true ? true : String(out),
+    commit: commit === true,
+    archive: archive === true,
+    onSubmit: onSubmit ? String(onSubmit) : undefined,
+    status: 'open',
+    revision: 1,
+    questionCount: spec.categories.reduce((n, c) => n + c.questions.length, 0),
     createdAt: new Date().toISOString(),
     pid: null,
     port: null,
@@ -79,11 +104,11 @@ export async function startDetachedServer(id, { open, idleTimeout, maxUpload } =
   const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore' });
   child.unref();
 
-  const metaPath = path.join(sessionDir(id), 'meta.json');
+  const file = metaPath(id);
   const deadline = Date.now() + 5000;
   let meta = null;
   while (Date.now() < deadline) {
-    meta = await readJson(metaPath, null);
+    meta = await readJson(file, null);
     if (meta && meta.port && meta.url) return meta;
     if (meta && meta.pid && !isAlive(meta.pid) && !meta.port) {
       throw new Error('brainstormform server exited during startup');
@@ -96,18 +121,18 @@ export async function startDetachedServer(id, { open, idleTimeout, maxUpload } =
 
 export async function waitForAnswers(id, { timeoutMs = 600000, pollMs = 300 } = {}) {
   const dir = sessionDir(id);
-  const answersPath = path.join(dir, 'answers.json');
+  const file = path.join(dir, 'answers.json');
   const start = Date.now();
   let meta = await readJson(path.join(dir, 'meta.json'), null);
   if (!meta) return { answers: null, dir, error: 'unknown-session' };
 
   while (true) {
-    const answers = await readJson(answersPath, null);
+    const answers = await readJson(file, null);
     if (answers) return { answers, dir, meta };
 
     meta = (await readJson(path.join(dir, 'meta.json'), null)) || meta;
     if (meta.pid && !isAlive(meta.pid)) {
-      const late = await readJson(answersPath, null);
+      const late = await readJson(file, null);
       if (late) return { answers: late, dir, meta };
       return { answers: null, dir, meta, error: 'server-exited' };
     }
@@ -131,14 +156,78 @@ function rewritePaths(value, fromDir, toDir) {
   return value;
 }
 
-export async function keepSession(id, answers) {
+export async function exportSession(id, answers, dest) {
   const dir = sessionDir(id);
-  const dest = path.join(process.cwd(), `brainstormform-${id}`);
   await fsp.rm(dest, { recursive: true, force: true });
-  await fsp.cp(dir, dest, { recursive: true });
-  const kept = rewritePaths(answers, dir, dest);
-  await writeJsonAtomic(path.join(dest, 'answers.json'), kept);
-  return { dir: dest, answers: kept };
+  await fsp.mkdir(dest, { recursive: true });
+  await fsp.cp(path.join(dir, 'questions.json'), path.join(dest, 'questions.json')).catch(() => {});
+  await fsp.cp(path.join(dir, 'uploads'), path.join(dest, 'uploads'), { recursive: true }).catch(() => {});
+  const rewritten = rewritePaths(answers, dir, dest);
+  await writeJsonAtomic(path.join(dest, 'answers.json'), rewritten);
+  return { dir: dest, answers: rewritten };
+}
+
+export async function keepSession(id, answers) {
+  return exportSession(id, answers, path.join(process.cwd(), `brainstormform-${id}`));
+}
+
+export function resolveOutDir(meta, id) {
+  if (meta.out === true) return path.join(process.cwd(), '.brainstormform', id);
+  return path.resolve(process.cwd(), String(meta.out));
+}
+
+export async function archiveSession(id, answers) {
+  const dest = path.join(stateRoot(), id);
+  const result = await exportSession(id, answers, dest);
+  const meta = (await readJson(metaPath(id), null)) || {};
+  const indexFile = path.join(stateRoot(), 'index.jsonl');
+  const line = JSON.stringify({
+    id,
+    title: meta.title || undefined,
+    archivedAt: new Date().toISOString(),
+    submittedAt: answers && answers.submittedAt,
+    answers: answers && answers.answers ? Object.keys(answers.answers).length : 0,
+    dir: result.dir,
+  });
+  await fsp.mkdir(stateRoot(), { recursive: true });
+  await fsp.appendFile(indexFile, line + '\n');
+  return result;
+}
+
+export async function archiveList() {
+  const file = path.join(stateRoot(), 'index.jsonl');
+  let raw;
+  try {
+    raw = await fsp.readFile(file, 'utf8');
+  } catch {
+    return [];
+  }
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .reverse();
+}
+
+export function gitCommit(dir, message) {
+  const add = spawnSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' });
+  if (add.status !== 0) return { ok: false, error: (add.stderr || add.stdout || '').trim() };
+  const commit = spawnSync('git', ['-C', dir, 'commit', '-m', message, '--no-verify'], {
+    encoding: 'utf8',
+  });
+  if (commit.status !== 0) {
+    const text = (commit.stderr || commit.stdout || '').trim();
+    if (/nothing to commit/i.test(text)) return { ok: true, skipped: true };
+    return { ok: false, error: text };
+  }
+  return { ok: true };
 }
 
 export async function stopSession(id) {
@@ -169,11 +258,16 @@ export async function listSessions() {
     const meta = await readJson(path.join(dir, 'meta.json'), null);
     if (!meta) continue;
     const answers = await readJson(path.join(dir, 'answers.json'), null);
+    const progress = await readJson(path.join(dir, 'progress.json'), null);
     out.push({
       id: meta.id || id,
       url: meta.url,
+      title: meta.title,
+      status: meta.status || (answers ? 'submitted' : 'open'),
+      revision: meta.revision,
       createdAt: meta.createdAt,
       submitted: !!answers,
+      answered: progress && progress.answers ? Object.keys(progress.answers).length : 0,
       alive: isAlive(meta.pid),
       dir,
     });
@@ -182,7 +276,6 @@ export async function listSessions() {
 }
 
 export async function cleanupStale() {
-  const root = sessionsRoot();
   const removed = [];
   for (const session of await listSessions()) {
     if (!session.alive && !session.submitted) {

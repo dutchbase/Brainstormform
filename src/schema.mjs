@@ -1,4 +1,4 @@
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export class SpecError extends Error {
   constructor(message) {
@@ -7,8 +7,19 @@ export class SpecError extends Error {
   }
 }
 
-export const QUESTION_TYPES = ['single', 'multi', 'text', 'textarea', 'number', 'scale', 'boolean', 'file'];
+export const QUESTION_TYPES = [
+  'single',
+  'multi',
+  'visual',
+  'text',
+  'textarea',
+  'number',
+  'scale',
+  'boolean',
+  'file',
+];
 const TYPES = new Set(QUESTION_TYPES);
+const CHOICE_TYPES = new Set(['single', 'multi', 'visual']);
 
 function slug(value, fallback) {
   const out = String(value || '')
@@ -18,7 +29,27 @@ function slug(value, fallback) {
   return out || fallback;
 }
 
-function normalizeQuestion(input, where, seen, index) {
+function normalizeShowIf(input, where, earlierIds) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SpecError(`${where}.showIf must be an object.`);
+  }
+  const question = input.question == null ? '' : String(input.question);
+  if (!question) throw new SpecError(`${where}.showIf.question is required.`);
+  if (!earlierIds.has(question)) {
+    throw new SpecError(`${where}.showIf references "${question}", which must appear earlier in the form.`);
+  }
+  if ('equals' in input) return { question, op: 'equals', value: input.equals };
+  if ('not' in input) return { question, op: 'not_equals', value: input.not };
+  if ('contains' in input) return { question, op: 'contains', value: input.contains };
+  if ('in' in input) {
+    if (!Array.isArray(input.in)) throw new SpecError(`${where}.showIf.in must be an array.`);
+    return { question, op: 'in', value: input.in };
+  }
+  if ('answered' in input) return { question, op: 'answered', value: input.answered !== false };
+  throw new SpecError(`${where}.showIf needs one of: equals, not, in, contains, answered.`);
+}
+
+function normalizeQuestion(input, where, state) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new SpecError(`${where} must be an object.`);
   }
@@ -26,19 +57,21 @@ function normalizeQuestion(input, where, seen, index) {
     throw new SpecError(`${where}.type "${input.type}" is invalid. Allowed: ${QUESTION_TYPES.join(', ')}.`);
   }
 
-  const id = input.id == null ? `q${index}` : String(input.id);
-  if (seen.has(id)) throw new SpecError(`Duplicate question id "${id}".`);
-  seen.add(id);
+  const id = input.id == null ? `q${++state.count}` : String(input.id);
+  if (state.seen.has(id)) throw new SpecError(`Duplicate question id "${id}".`);
 
   const label = input.label == null ? String(input.title || '') : String(input.label);
   if (!label) throw new SpecError(`${where}.label is required.`);
 
   const q = { id, type: input.type, label, required: input.required === true };
-  if (input.help != null) q.help = String(input.help);
+  if (input.showIf !== undefined) q.showIf = normalizeShowIf(input.showIf, where, state.seen);
+  const intro = input.intro !== undefined ? input.intro : input.help;
+  if (intro != null) q.intro = String(intro);
+  if (input.content != null) q.content = String(input.content);
   if (input.placeholder != null) q.placeholder = String(input.placeholder);
   if (input.default !== undefined) q.default = input.default;
 
-  if (input.type === 'single' || input.type === 'multi') {
+  if (CHOICE_TYPES.has(input.type)) {
     if (!Array.isArray(input.options) || input.options.length === 0) {
       throw new SpecError(`${where}.options must be a non-empty array for type "${input.type}".`);
     }
@@ -48,9 +81,15 @@ function normalizeQuestion(input, where, seen, index) {
       if (value == null) throw new SpecError(`${where}.options[${i}] needs a "value".`);
       const out = { value: String(value), label: String(text) };
       if (opt && typeof opt === 'object' && opt.description != null) out.description = String(opt.description);
+      if (input.type === 'visual') {
+        const image = opt && typeof opt === 'object' ? opt.image : undefined;
+        if (image == null) throw new SpecError(`${where}.options[${i}].image is required for type "visual".`);
+        out.image = String(image);
+      }
       return out;
     });
-    q.allowOther = input.allowOther === true;
+    q.allowOther = (input.type === 'single' || input.type === 'multi') && input.allowOther === true;
+    if (input.type === 'visual') q.multiple = input.multiple === true;
   }
 
   if (input.type === 'number' || input.type === 'scale') {
@@ -72,7 +111,31 @@ function normalizeQuestion(input, where, seen, index) {
     q.maxFiles = Number.isFinite(input.maxFiles) ? input.maxFiles : q.multiple ? 5 : 1;
   }
 
+  state.seen.add(id);
   return q;
+}
+
+function normalizeCategory(input, where, state, { requireTitle }) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SpecError(`${where} must be an object.`);
+  }
+  if (requireTitle && !input.title) throw new SpecError(`${where}.title is required.`);
+  if (!Array.isArray(input.questions) || input.questions.length === 0) {
+    throw new SpecError(`${where} must have a non-empty "questions" array.`);
+  }
+  const questions = input.questions.map((q, qi) => normalizeQuestion(q, `${where}.questions[${qi}]`, state));
+  const out = {
+    id: String(input.id || slug(input.title, `${where.replace(/[^\w]+/g, '-')}-${state.categoryCount}`)),
+    title: String(input.title || `Section ${++state.categoryCount}`),
+    questions,
+  };
+  const intro = input.intro !== undefined ? input.intro : input.description;
+  if (intro != null) out.intro = String(intro);
+  return out;
+}
+
+function categoryBaseId(input, index) {
+  return String((input && input.id) || slug(input && input.title, `cat${index + 1}`));
 }
 
 export function normalizeSpec(input) {
@@ -94,27 +157,17 @@ export function normalizeSpec(input) {
   const settings = {
     pageSize: Number.isFinite(rawSettings.pageSize) ? Math.max(1, Math.floor(rawSettings.pageSize)) : 5,
     theme: rawSettings.theme === 'light' || rawSettings.theme === 'dark' ? rawSettings.theme : 'auto',
-    submitLabel: rawSettings.submitLabel != null ? String(rawSettings.submitLabel) : 'Submit',
+    submitLabel: rawSettings.submitLabel != null ? String(rawSettings.submitLabel) : 'Continue',
+    finishLabel: rawSettings.finishLabel != null ? String(rawSettings.finishLabel) : 'Finish',
   };
 
-  const seen = new Set();
-  let counter = 0;
+  const state = { seen: new Set(), count: 0, categoryCount: 0 };
+  const categoryIds = new Set();
   const outCategories = categories.map((cat, ci) => {
-    if (!cat || typeof cat !== 'object' || Array.isArray(cat)) {
-      throw new SpecError(`categories[${ci}] must be an object.`);
-    }
-    if (!Array.isArray(cat.questions) || cat.questions.length === 0) {
-      throw new SpecError(`Category "${cat.title || ci}" must have a non-empty "questions" array.`);
-    }
-    const questions = cat.questions.map((q, qi) =>
-      normalizeQuestion(q, `categories[${ci}].questions[${qi}]`, seen, ++counter),
-    );
-    const out = {
-      id: String(cat.id || slug(cat.title, `cat${ci + 1}`)),
-      title: String(cat.title || `Section ${ci + 1}`),
-      questions,
-    };
-    if (cat.description != null) out.description = String(cat.description);
+    const where = `categories[${ci}]`;
+    const out = normalizeCategory(cat, where, state, { requireTitle: true });
+    if (categoryIds.has(out.id)) out.id = `${out.id}-${ci + 1}`;
+    categoryIds.add(out.id);
     return out;
   });
 
@@ -125,6 +178,46 @@ export function normalizeSpec(input) {
     settings,
     categories: outCategories,
   };
+}
+
+export function normalizeFragment(spec, fragment) {
+  let rawCategories;
+  if (Array.isArray(fragment)) {
+    rawCategories = [{ title: 'Follow-up questions', questions: fragment }];
+  } else if (fragment && Array.isArray(fragment.categories)) {
+    rawCategories = fragment.categories;
+  } else if (fragment && Array.isArray(fragment.questions)) {
+    rawCategories = [{ title: fragment.title || 'Follow-up questions', questions: fragment.questions }];
+  } else {
+    throw new SpecError('Fragment must be an array of questions or an object with "categories" or "questions".');
+  }
+  if (rawCategories.length === 0) throw new SpecError('Fragment has no questions.');
+
+  const state = {
+    seen: collectIds(spec),
+    count: allQuestions(spec).length,
+    categoryCount: spec.categories.length,
+  };
+  const categoryIds = new Set(spec.categories.map((c) => c.id));
+
+  return rawCategories.map((cat, ci) => {
+    const where = `fragment.categories[${ci}]`;
+    const out = normalizeCategory(cat, where, state, { requireTitle: ci === 0 ? false : true });
+    if (categoryIds.has(out.id)) out.id = `${out.id}-${Date.now().toString(36)}`;
+    categoryIds.add(out.id);
+    return out;
+  });
+}
+
+export function appendFragment(spec, fragment) {
+  const categories = normalizeFragment(spec, fragment);
+  return { ...spec, categories: [...spec.categories, ...categories] };
+}
+
+export function collectIds(spec) {
+  const ids = new Set();
+  for (const cat of spec.categories) for (const q of cat.questions) ids.add(q.id);
+  return ids;
 }
 
 export function allQuestions(spec) {
@@ -144,7 +237,8 @@ export const SPEC_SCHEMA = {
       properties: {
         pageSize: { type: 'integer', minimum: 1, default: 5 },
         theme: { enum: ['auto', 'light', 'dark'], default: 'auto' },
-        submitLabel: { type: 'string', default: 'Submit' },
+        submitLabel: { type: 'string' },
+        finishLabel: { type: 'string' },
       },
       additionalProperties: false,
     },
@@ -157,7 +251,8 @@ export const SPEC_SCHEMA = {
         properties: {
           id: { type: 'string' },
           title: { type: 'string' },
-          description: { type: 'string' },
+          intro: { type: 'string', description: 'Markdown, shown under the heading' },
+          description: { type: 'string', description: 'Alias for intro' },
           questions: { type: 'array', minItems: 1, items: { $ref: '#/definitions/question' } },
         },
       },
@@ -171,25 +266,44 @@ export const SPEC_SCHEMA = {
         id: { type: 'string' },
         type: { enum: QUESTION_TYPES },
         label: { type: 'string' },
-        help: { type: 'string' },
+        intro: { type: 'string', description: 'Markdown help text' },
+        content: { type: 'string', description: 'Markdown block rendered under the heading' },
         required: { type: 'boolean', default: false },
         placeholder: { type: 'string' },
         default: {},
+        showIf: {
+          type: 'object',
+          description: 'Show only when an earlier answer matches',
+          properties: {
+            question: { type: 'string' },
+            equals: {},
+            not: {},
+            in: { type: 'array' },
+            contains: {},
+            answered: { type: 'boolean' },
+          },
+          required: ['question'],
+        },
         options: {
           type: 'array',
           items: {
             type: 'object',
             required: ['value'],
-            properties: { value: {}, label: { type: 'string' }, description: { type: 'string' } },
+            properties: {
+              value: {},
+              label: { type: 'string' },
+              description: { type: 'string' },
+              image: { type: 'string', description: 'visual only: https URL or local file path' },
+            },
           },
         },
         allowOther: { type: 'boolean' },
+        multiple: { type: 'boolean' },
         min: { type: 'number' },
         max: { type: 'number' },
         step: { type: 'number' },
         scaleLabels: { type: 'array', items: { type: 'string' } },
         accept: { type: 'string' },
-        multiple: { type: 'boolean' },
         maxFiles: { type: 'integer' },
       },
     },
@@ -198,17 +312,18 @@ export const SPEC_SCHEMA = {
 
 const EXAMPLE = {
   title: 'Project kickoff brainstorm',
-  intro: 'A few questions to nail down scope. You can skip anything optional.',
+  intro: 'A few questions to nail down scope. The form saves as you type.',
   settings: { pageSize: 4 },
   categories: [
     {
       title: 'Scope',
+      intro: 'What are we actually building, and how big is it?',
       questions: [
         {
           id: 'goal',
           type: 'textarea',
           label: 'What is the primary goal?',
-          help: 'One or two sentences.',
+          intro: 'One or two sentences is plenty.',
           required: true,
         },
         {
@@ -221,6 +336,12 @@ const EXAMPLE = {
             { value: 'android', label: 'Android' },
           ],
           allowOther: true,
+        },
+        {
+          id: 'appstore',
+          type: 'text',
+          label: 'Which app store account should we ship under?',
+          showIf: { question: 'platforms', contains: 'ios' },
         },
         {
           id: 'urgency',
@@ -237,15 +358,19 @@ const EXAMPLE = {
       questions: [
         {
           id: 'mood',
-          type: 'single',
+          type: 'visual',
           label: 'Pick a visual direction',
           options: [
-            { value: 'minimal', label: 'Minimal', description: 'Whitespace, few colors' },
-            { value: 'bold', label: 'Bold', description: 'Strong colors and type' },
+            { value: 'minimal', label: 'Minimal', image: 'https://placehold.co/320x200?text=Minimal' },
+            { value: 'bold', label: 'Bold', image: 'https://placehold.co/320x200?text=Bold' },
           ],
-          allowOther: true,
         },
-        { id: 'references', type: 'file', label: 'Upload any reference images', multiple: true, accept: 'image/*' },
+        {
+          id: 'notes',
+          type: 'textarea',
+          label: 'Anything else?',
+          intro: 'Links are welcome, e.g. [our brand guide](https://example.com).',
+        },
       ],
     },
   ],
@@ -256,39 +381,36 @@ export function schemaText() {
 }
 
 export function guideText() {
-  return `# Brainstormform
+  return `# Brainstormform — question format
 
-Ask a user unlimited brainstorming questions through a local web form.
+Ask a user unlimited questions through a local web form, live.
 
-## How to use it
+## Commands
 
-1. Write a questions spec (JSON, see below) to a file.
-2. Run:  brainstormform ask questions.json --open
-   It prints a JSON line: {"sessionId":"...","url":"http://127.0.0.1:PORT/s/TOKEN","pid":...}
-3. Tell the user to open the url (it opens automatically with --open) and submit.
-4. Fetch the answers:  brainstormform wait <sessionId> --timeout 600
-   - stdout is the answers JSON (or exit code 3 on timeout: just call wait again)
-   - session data is deleted as soon as you read it, unless you pass --keep
+  brainstormform ask questions.json --open        # start a form, prints {sessionId,url}
+  brainstormform progress <id>                    # current draft answers + status
+  brainstormform add <id> more-questions.json     # append questions to a live form
+  brainstormform wait <id> --timeout 600          # block until the user presses Finish
 
-Prefer the MCP tools if your client supports MCP:
-- ask_questions({ title, categories | questions, open, waitSeconds }) -> { sessionId, url }
-- get_answers({ sessionId, timeoutSeconds }) -> answers
+MCP tools: ask_questions, read_answers, add_questions, wait_for_answers.
 
 ## Spec format
 
-Top level:
-- title (string), intro (string, optional)
-- settings: { pageSize (default 5), theme: "auto"|"light"|"dark", submitLabel }
-- categories: [ { title, description?, questions: [ ... ] } ]
-  (a flat top-level "questions": [...] array is also accepted)
+Top level: title, intro (Markdown), settings { pageSize, theme, submitLabel, finishLabel },
+and either categories: [{ title, intro?, questions: [...] }] or a flat questions: [...].
 
 Question:
 - type: one of ${QUESTION_TYPES.join(', ')}
-- label (string, required), id (string, auto q1..qN), help?, required? (default false)
-- single/multi: options: [{ value, label?, description? }], allowOther? (reveals a free-text box)
-- number/scale: min, max, step?, scaleLabels? (scale defaults 1..5)
-- file: accept? ("image/*,.pdf"), multiple? (default false), maxFiles?
+- label (required), id (auto q1..qN), required?
+- intro (Markdown, short help), content (Markdown block)
+- showIf: { question, equals | not | in | contains | answered } to show conditionally
+- single/multi: options [{ value, label?, description? }], allowOther?
+- visual: options [{ value, label?, description?, image }] where image is https URL or local path
+- number/scale: min, max, step?, scaleLabels?
+- file: accept?, multiple?, maxFiles?
 - text/textarea: placeholder?
+
+"add" appends new questions to a running form. Existing questions cannot be changed.
 
 ## Example
 
@@ -299,17 +421,14 @@ ${JSON.stringify(EXAMPLE, null, 2)}
 {
   "sessionId": "...", "submittedAt": "ISO", "durationMs": 12345,
   "answers": {
-    "goal":     { "type": "textarea", "value": "Ship v1" },
-    "platforms":{ "type": "multi", "value": ["web","ios"], "other": "desktop" },
-    "urgency":  { "type": "scale", "value": 4 },
-    "mood":     { "type": "single", "value": "minimal", "other": null },
-    "references": { "type": "file", "value": [{ "name":"x.png", "path":"/abs/path", "size":123, "mime":"image/png" }] }
+    "goal":      { "type": "textarea", "value": "Ship v1" },
+    "platforms": { "type": "multi", "value": ["web","ios"], "other": "desktop" },
+    "urgency":   { "type": "scale", "value": 4 }
   },
-  "unanswered": ["..."]
+  "skipped": ["notes"],
+  "unanswered": [],
+  "hidden": ["appstore"]
 }
-
-Files are stored under the session dir and referenced by absolute path. Use --keep to
-copy the session (with uploads) to ./brainstormform-<id>/ before it is cleaned up.
 `;
 }
 

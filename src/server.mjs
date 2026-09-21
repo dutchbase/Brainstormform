@@ -1,14 +1,27 @@
 import http from 'node:http';
 import fsp from 'node:fs/promises';
+import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 import { readJson, writeJsonAtomic, sessionDir, openBrowser } from './session.mjs';
+import { appendFragment, allQuestions, SpecError } from './schema.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UI_PATH = path.join(__dirname, 'ui.html');
+const RENDER_PATH = path.join(__dirname, 'render.mjs');
 const HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
+const MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+};
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -65,11 +78,93 @@ function readBody(req, limit) {
   });
 }
 
-export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25 * 1024 * 1024, onSubmitted, onActivity }) {
+function buildAssets(spec, token) {
+  const clientSpec = JSON.parse(JSON.stringify(spec));
+  const assets = [];
+  for (const cat of clientSpec.categories) {
+    for (const q of cat.questions) {
+      if (q.type !== 'visual' || !Array.isArray(q.options)) continue;
+      for (const option of q.options) {
+        if (!option.image || /^https?:\/\//i.test(option.image)) continue;
+        assets.push(path.resolve(process.cwd(), option.image));
+        option.image = `/s/${token}/api/asset/${assets.length - 1}`;
+      }
+    }
+  }
+  return { assets, clientSpec };
+}
+
+export async function startServer({
+  sessionDir: dir,
+  spec: initialSpec,
+  token,
+  maxUpload = 25 * 1024 * 1024,
+  onSubmitted,
+  onActivity,
+  onSubmitCommand,
+}) {
   const uploadsDir = path.join(dir, 'uploads');
   const answersPath = path.join(dir, 'answers.json');
+  const progressPath = path.join(dir, 'progress.json');
+  const questionsPath = path.join(dir, 'questions.json');
+  const metaFile = path.join(dir, 'meta.json');
   await fsp.mkdir(uploadsDir, { recursive: true });
   const uiHtml = await fsp.readFile(UI_PATH, 'utf8');
+  const renderSrc = await fsp.readFile(RENDER_PATH, 'utf8');
+
+  let revision = 1;
+  let status = 'open';
+  let spec = initialSpec;
+  let built = buildAssets(spec, token);
+  const sse = new Set();
+  const sessionId = path.basename(dir);
+  let url = '';
+
+  function clientSpec() {
+    return built.clientSpec;
+  }
+
+  function broadcast(event, data) {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of sse) {
+      try {
+        res.write(payload);
+      } catch {
+        /* dropped */
+      }
+    }
+  }
+
+  async function syncMeta(extra = {}) {
+    const meta = (await readJson(metaFile, null)) || {};
+    await writeJsonAtomic(metaFile, {
+      ...meta,
+      status,
+      revision,
+      questionCount: allQuestions(spec).length,
+      ...extra,
+    });
+  }
+
+  async function runHook() {
+    if (!onSubmitCommand) return;
+    try {
+      const child = spawn(onSubmitCommand, {
+        shell: true,
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          BRAINSTORMFORM_ANSWERS: answersPath,
+          BRAINSTORMFORM_SESSION: sessionId,
+          BRAINSTORMFORM_URL: url,
+        },
+      });
+      child.unref();
+    } catch {
+      /* non-fatal */
+    }
+  }
 
   async function handle(req, res) {
     if (onActivity) onActivity();
@@ -80,8 +175,8 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
       return;
     }
 
-    const url = new URL(req.url, `http://${host}`);
-    const segments = url.pathname.split('/').filter(Boolean);
+    const parsed = new URL(req.url, `http://${host}`);
+    const segments = parsed.pathname.split('/').filter(Boolean);
     if (segments[0] !== 's' || segments[1] !== token) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('not found');
@@ -95,9 +190,18 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
         'cache-control': 'no-store',
         'x-content-type-options': 'nosniff',
         'content-security-policy':
-          "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; form-action 'none'; base-uri 'none'",
+          "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob: data: https:; connect-src 'self'; form-action 'none'; base-uri 'none'",
       });
-      res.end(uiHtml);
+      res.end(uiHtml.replaceAll('__BF_BASE_URL__', `/s/${token}`));
+      return;
+    }
+
+    if (rest[0] === 'app' && rest[1] === 'render.mjs' && req.method === 'GET') {
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(renderSrc);
       return;
     }
 
@@ -110,18 +214,130 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
     const action = rest[1];
 
     if (action === 'questions' && req.method === 'GET') {
-      sendJson(res, 200, spec);
+      sendJson(res, 200, { spec: clientSpec(), revision, status });
+      return;
+    }
+
+    if (action === 'progress' && req.method === 'GET') {
+      sendJson(res, 200, (await readJson(progressPath, null)) || { answers: {}, other: {}, skipped: [] });
       return;
     }
 
     if (action === 'status' && req.method === 'GET') {
       const answers = await readJson(answersPath, null);
-      sendJson(res, 200, { submitted: !!answers });
+      sendJson(res, 200, { submitted: !!answers, status, revision });
+      return;
+    }
+
+    if (action === 'events' && req.method === 'GET') {
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      });
+      res.write(`event: hello\ndata: ${JSON.stringify({ revision, status })}\n\n`);
+      sse.add(res);
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          /* dropped */
+        }
+      }, 20000);
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        sse.delete(res);
+      });
+      return;
+    }
+
+    if (action === 'asset' && req.method === 'GET') {
+      const index = Number(rest[2]);
+      const file = built.assets[index];
+      if (!file) {
+        sendJson(res, 404, { error: 'unknown asset' });
+        return;
+      }
+      try {
+        await fsp.access(file);
+      } catch {
+        sendJson(res, 404, { error: 'asset not found' });
+        return;
+      }
+      res.writeHead(200, {
+        'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'cache-control': 'no-store',
+      });
+      fs.createReadStream(file).pipe(res);
+      return;
+    }
+
+    if (action === 'progress' && req.method === 'POST') {
+      let body;
+      try {
+        body = await readBody(req, 2 * 1024 * 1024);
+      } catch {
+        sendJson(res, 413, { error: 'progress too large' });
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(body.toString('utf8'));
+      } catch {
+        sendJson(res, 400, { error: 'invalid JSON' });
+        return;
+      }
+      await writeJsonAtomic(progressPath, {
+        answers: payload.answers || {},
+        other: payload.other || {},
+        skipped: Array.isArray(payload.skipped) ? payload.skipped : [],
+        updatedAt: new Date().toISOString(),
+      });
+      sendJson(res, 200, { ok: true, revision, status });
+      return;
+    }
+
+    if (action === 'append' && req.method === 'POST') {
+      if (status !== 'open') {
+        sendJson(res, 409, { error: 'session already submitted; start a new session' });
+        return;
+      }
+      let body;
+      try {
+        body = await readBody(req, 2 * 1024 * 1024);
+      } catch {
+        sendJson(res, 413, { error: 'fragment too large' });
+        return;
+      }
+      let fragment;
+      try {
+        fragment = JSON.parse(body.toString('utf8'));
+      } catch {
+        sendJson(res, 400, { error: 'invalid JSON' });
+        return;
+      }
+      let next;
+      try {
+        next = appendFragment(spec, fragment);
+      } catch (err) {
+        if (err instanceof SpecError) {
+          sendJson(res, 400, { error: err.message });
+          return;
+        }
+        throw err;
+      }
+      spec = next;
+      revision += 1;
+      built = buildAssets(spec, token);
+      await writeJsonAtomic(questionsPath, spec);
+      await syncMeta();
+      broadcast('appended', { revision, status, spec: clientSpec() });
+      sendJson(res, 200, { revision, questionCount: allQuestions(spec).length });
       return;
     }
 
     if (action === 'upload' && req.method === 'POST') {
-      const original = sanitizeName(url.searchParams.get('name') || 'file');
+      const original = sanitizeName(parsed.searchParams.get('name') || 'file');
       let body;
       try {
         body = await readBody(req, maxUpload);
@@ -145,6 +361,10 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
     }
 
     if (action === 'submit' && req.method === 'POST') {
+      if (status === 'submitted') {
+        sendJson(res, 409, { error: 'already submitted' });
+        return;
+      }
       let body;
       try {
         body = await readBody(req, 5 * 1024 * 1024);
@@ -159,16 +379,21 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
         sendJson(res, 400, { error: 'invalid JSON' });
         return;
       }
-      const answers = payload && typeof payload === 'object' && payload.answers ? payload : { answers: payload };
       const record = {
-        sessionId: path.basename(dir),
+        sessionId,
         submittedAt: new Date().toISOString(),
         durationMs: payload && payload.durationMs,
-        answers: answers.answers || {},
+        answers: (payload && payload.answers) || {},
+        skipped: Array.isArray(payload && payload.skipped) ? payload.skipped : [],
         unanswered: Array.isArray(payload && payload.unanswered) ? payload.unanswered : [],
+        hidden: Array.isArray(payload && payload.hidden) ? payload.hidden : [],
       };
       await writeJsonAtomic(answersPath, record);
+      status = 'submitted';
+      await syncMeta({ submittedAt: record.submittedAt });
+      broadcast('state', { revision, status });
       if (onSubmitted) onSubmitted(record);
+      runHook();
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -199,9 +424,17 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
   });
 
   const port = server.address().port;
-  const url = `http://127.0.0.1:${port}/s/${token}`;
+  url = `http://127.0.0.1:${port}/s/${token}`;
 
   async function close() {
+    for (const res of sse) {
+      try {
+        res.end();
+      } catch {
+        /* ignore */
+      }
+    }
+    sse.clear();
     try {
       server.closeAllConnections?.();
     } catch {
@@ -210,7 +443,16 @@ export async function startServer({ sessionDir: dir, spec, token, maxUpload = 25
     await new Promise((resolve) => server.close(resolve));
   }
 
-  return { server, port, url, close, answersPath, uploadsDir };
+  return {
+    server,
+    port,
+    url,
+    close,
+    answersPath,
+    uploadsDir,
+    getRevision: () => revision,
+    getStatus: () => status,
+  };
 }
 
 async function runDaemon() {
@@ -231,6 +473,7 @@ async function runDaemon() {
     token: meta.token,
     maxUpload,
     onActivity: () => touch(),
+    onSubmitCommand: meta.onSubmit,
   });
 
   await writeJsonAtomic(path.join(dir, 'meta.json'), { ...meta, pid: process.pid, port, url });
@@ -246,7 +489,9 @@ async function runDaemon() {
     closing = true;
     clearTimeout(timer);
     close().finally(async () => {
-      if (!meta.keep) await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+      if (!meta.keep && !meta.out && !meta.archive) {
+        await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+      }
       process.exit(0);
     });
   }
