@@ -6,6 +6,12 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+### Added
+
+- README badges, an animated demo GIF and a social preview card.
+- `PROMOTION.md`: launch checklist and ready-to-post copy for Show HN, X,
+  Reddit, Product Hunt, directories and a blog outline.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

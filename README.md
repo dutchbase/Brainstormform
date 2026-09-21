@@ -1,5 +1,10 @@
 # Brainstormform
 
+[![CI](https://github.com/dutchbase/Brainstormform/actions/workflows/ci.yml/badge.svg)](https://github.com/dutchbase/Brainstormform/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A518.17-informational.svg)](https://nodejs.org)
+[![MCP server](https://img.shields.io/badge/MCP-server-5b52e8.svg)](docs/mcp.md)
+
 **Ask a user as many questions as you need, then get out of the way.**
 
 Your coding agent can ask you questions, but usually only a handful at a time,
@@ -11,7 +16,7 @@ as JSON.
 It runs on your machine, in a throwaway local server, with no dependencies and
 no telemetry.
 
-![The Brainstormform form](docs/assets/form.png)
+![The Brainstormform form in action](docs/assets/demo.gif)
 
 ## Why
 
