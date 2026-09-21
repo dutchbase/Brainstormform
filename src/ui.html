@@ -233,6 +233,10 @@ function visibleOnPage(i) {
   return state.pages[i].questions.filter(isVisibleQ);
 }
 
+function visibleKey() {
+  return visibleOnPage(state.page).map((q) => q.id).join('|');
+}
+
 function clampPage() {
   if (!state.pages.length) return;
   if (visibleOnPage(state.page).length) return;
@@ -332,7 +336,7 @@ function questionHtml(q) {
     '</div>';
 }
 
-function render() {
+function render(scroll) {
   if (state.submitted) return;
   if (state.review) return renderReview();
   clampPage();
@@ -345,7 +349,7 @@ function render() {
   mainEl.innerHTML = head + '<div class="page anim" id="pageHost" data-dir="' + state.dir + '">' + vis.map(questionHtml).join('') + '</div>';
   mainEl.classList.remove('anim');
   updateFooter();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (scroll !== false) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function refreshQuestion(id) {
@@ -683,15 +687,19 @@ function applyAnswerFromChange(host, t) {
   showError(q.id, null);
 }
 
-function onChoiceChange() { scheduleSave(true); render(); }
+function onChoiceChange(before) {
+  scheduleSave(true);
+  if (visibleKey() !== before) render(false);
+}
 
 mainEl.addEventListener('change', (e) => {
   const t = e.target;
   if (t.matches('input[type=file]')) { handleFiles(t.dataset.file, t.files); t.value = ''; return; }
   const host = t.closest('[data-qid]');
   if (!host) return;
+  const before = visibleKey();
   applyAnswerFromChange(host, t);
-  onChoiceChange();
+  onChoiceChange(before);
 });
 
 mainEl.addEventListener('input', (e) => {
@@ -736,11 +744,12 @@ mainEl.addEventListener('click', (e) => {
   if (seg) {
     const id = seg.dataset.seg;
     const q = state.byId[id];
+    const before = visibleKey();
     state.answers[id] = q.type === 'boolean' ? seg.dataset.value === 'true' : Number(seg.dataset.value);
     delete state.skipped[id];
     qEl(id).querySelectorAll('.seg').forEach((s) => s.classList.toggle('sel', s === seg));
     showError(id, null);
-    onChoiceChange();
+    onChoiceChange(before);
   }
 });
 
@@ -781,6 +790,7 @@ document.addEventListener('keydown', (e) => {
     const q = activeChoiceQuestion();
     if (!q) return;
     const idx = Number(e.key) - 1;
+    const before = visibleKey();
     if (q.type === 'boolean') { if (idx > 1) return; state.answers[q.id] = idx === 0; }
     else if (q.type === 'scale') { const v = q.min + idx * q.step; if (v > q.max) return; state.answers[q.id] = v; }
     else if (q.options && q.options[idx]) {
@@ -790,7 +800,7 @@ document.addEventListener('keydown', (e) => {
     } else return;
     delete state.skipped[q.id];
     e.preventDefault();
-    onChoiceChange();
+    onChoiceChange(before);
     return;
   }
   if (e.key === 'Enter') { e.preventDefault(); next(); return; }
