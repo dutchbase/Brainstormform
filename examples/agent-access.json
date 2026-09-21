@@ -1,0 +1,296 @@
+{
+  "title": "Making Brainstormform easy to install for any agent",
+  "intro": "Goal: make Brainstormform trivial to install and discover for Claude Code, Codex and opencode, and workable for every other agent too. Answers save as you go, only the last question is required.",
+  "settings": { "pageSize": 5, "finishLabel": "Send to the agent" },
+  "categories": [
+    {
+      "title": "Install channel",
+      "intro": "How should people actually get the tool?",
+      "questions": [
+        {
+          "id": "primary_install",
+          "type": "single",
+          "label": "What should the primary install method be?",
+          "allowOther": true,
+          "options": [
+            { "value": "npx", "label": "npx brainstormform ... ", "description": "Zero install; always fetches the latest" },
+            { "value": "npm_global", "label": "npm install -g brainstormform" },
+            { "value": "curl", "label": "curl -fsSL https://… | sh", "description": "Detects platform, installs a binary" },
+            { "value": "brew", "label": "Homebrew" },
+            { "value": "clone", "label": "git clone + npm link", "description": "Current state" },
+            { "value": "binary", "label": "Download a standalone binary" }
+          ]
+        },
+        {
+          "id": "publish_targets",
+          "type": "multi",
+          "label": "Where should we publish?",
+          "options": [
+            { "value": "npm", "label": "npm registry", "description": "Enables npx and global install" },
+            { "value": "releases", "label": "GitHub Releases", "description": "Versioned binaries + notes" },
+            { "value": "brew", "label": "Homebrew tap" },
+            { "value": "docker", "label": "Docker image" },
+            { "value": "mcp_registry", "label": "Official MCP registry" }
+          ]
+        },
+        {
+          "id": "binary_goal",
+          "type": "single",
+          "label": "How important is running without Node installed?",
+          "options": [
+            { "value": "node_ok", "label": "Requiring Node is fine", "description": "Every target agent already ships Node or runs on it" },
+            { "value": "binary", "label": "A no-Node binary matters soon" },
+            { "value": "later", "label": "Nice for later, not now" }
+          ]
+        },
+        {
+          "id": "npx_default",
+          "type": "single",
+          "label": "Should `npx -y brainstormform …` be the default instruction we give agents?",
+          "options": [
+            { "value": "yes", "label": "Yes — zero install is the whole point" },
+            { "value": "no", "label": "No — recommend a real install, npx as fallback" },
+            { "value": "both", "label": "Both, depending on the agent" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "One-command setup",
+      "intro": "Can a single command configure everything for a detected agent?",
+      "questions": [
+        {
+          "id": "setup_cmd",
+          "type": "single",
+          "label": "Should there be a `brainstormform setup` command?",
+          "allowOther": true,
+          "options": [
+            { "value": "wizard", "label": "Yes — interactive, detects and confirms" },
+            { "value": "flags", "label": "Yes — non-interactive, e.g. `setup --all`" },
+            { "value": "both", "label": "Both: interactive by default, flags for scripts" },
+            { "value": "none", "label": "No — document the manual steps" }
+          ]
+        },
+        {
+          "id": "setup_tasks",
+          "type": "multi",
+          "label": "What should setup do when it runs?",
+          "showIf": { "question": "setup_cmd", "not": "none" },
+          "options": [
+            { "value": "skill", "label": "Install the agent skill", "description": "So the agent knows when to use it" },
+            { "value": "mcp", "label": "Write MCP config for detected agents" },
+            { "value": "global", "label": "Install the CLI globally" },
+            { "value": "doctor", "label": "Run checks and print clear next steps" },
+            { "value": "browser", "label": "Verify the browser can open and run a test form" }
+          ]
+        },
+        {
+          "id": "detect_agents",
+          "type": "multi",
+          "label": "Which agents should setup try to detect and configure?",
+          "allowOther": true,
+          "options": [
+            { "value": "claude", "label": "Claude Code" },
+            { "value": "codex", "label": "Codex" },
+            { "value": "opencode", "label": "opencode" },
+            { "value": "cursor", "label": "Cursor" },
+            { "value": "windsurf", "label": "Windsurf" },
+            { "value": "gemini", "label": "Gemini CLI" },
+            { "value": "zed", "label": "Zed" },
+            { "value": "cline", "label": "Cline / Roo" }
+          ]
+        },
+        {
+          "id": "config_write",
+          "type": "single",
+          "label": "How bold should setup be with agent config files?",
+          "options": [
+            { "value": "auto", "label": "Edit them automatically" },
+            { "value": "backup", "label": "Edit, but back up first and show a diff" },
+            { "value": "print", "label": "Never edit — only print snippets to paste" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Per-agent integration",
+      "intro": "What do we actually ship for each agent?",
+      "questions": [
+        {
+          "id": "claude_integration",
+          "type": "multi",
+          "label": "For Claude Code, what should we provide?",
+          "options": [
+            { "value": "mcp_add", "label": "A one-line `claude mcp add …` command" },
+            { "value": "plugin", "label": "A Claude Code plugin / marketplace listing" },
+            { "value": "skill", "label": "Install a skill into ~/.claude/skills" },
+            { "value": "agentsmd", "label": "An AGENTS.md / CLAUDE.md snippet" }
+          ]
+        },
+        {
+          "id": "codex_integration",
+          "type": "multi",
+          "label": "For Codex, what should we provide?",
+          "options": [
+            { "value": "mcp_toml", "label": "A config.toml [mcp_servers] block" },
+            { "value": "skill", "label": "A Codex skill / instructions file" },
+            { "value": "agentsmd", "label": "An AGENTS.md snippet" },
+            { "value": "installer", "label": "A setup path that writes it for them" }
+          ]
+        },
+        {
+          "id": "opencode_integration",
+          "type": "multi",
+          "label": "For opencode, what should we provide?",
+          "options": [
+            { "value": "mcp_json", "label": "An opencode.json mcp block" },
+            { "value": "skill", "label": "A skill in ~/.config/opencode/skills" },
+            { "value": "plugin", "label": "An opencode plugin" },
+            { "value": "agentsmd", "label": "An AGENTS.md snippet" }
+          ]
+        },
+        {
+          "id": "other_agents",
+          "type": "multi",
+          "label": "Beyond those three, which agents matter most?",
+          "allowOther": true,
+          "options": [
+            { "value": "cursor", "label": "Cursor" },
+            { "value": "windsurf", "label": "Windsurf" },
+            { "value": "cline", "label": "Cline" },
+            { "value": "gemini", "label": "Gemini CLI" },
+            { "value": "aider", "label": "Aider" },
+            { "value": "zed", "label": "Zed" },
+            { "value": "continue", "label": "Continue" },
+            { "value": "generic_mcp", "label": "Any generic MCP client" }
+          ]
+        },
+        {
+          "id": "plugin_needed",
+          "type": "single",
+          "label": "Do we need real plugins, or is MCP + a skill enough?",
+          "options": [
+            { "value": "enough", "label": "MCP + skill is enough" },
+            { "value": "plugins", "label": "Ship first-class plugins where they exist" },
+            { "value": "later", "label": "Start with MCP + skill, add plugins later" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Discovery & agent docs",
+      "intro": "How do agents and their users find this without being told?",
+      "questions": [
+        {
+          "id": "agent_readable",
+          "type": "multi",
+          "label": "Which agent-readable surfaces should we add?",
+          "options": [
+            { "value": "llms_txt", "label": "llms.txt / llms-full.txt" },
+            { "value": "agents_md", "label": "AGENTS.md with usage rules" },
+            { "value": "json_mode", "label": "A --json mode on every command" },
+            { "value": "schema", "label": "Keep `schema` / `guide` output great" },
+            { "value": "mcp_desc", "label": "Rich MCP tool descriptions" },
+            { "value": "badges", "label": "README badges (CI, version, license)" }
+          ]
+        },
+        {
+          "id": "registries",
+          "type": "multi",
+          "label": "Where should we list the project so it gets found?",
+          "options": [
+            { "value": "mcp_registry", "label": "Official MCP registry" },
+            { "value": "npm", "label": "npm search / README page" },
+            { "value": "awesome", "label": "Awesome lists (MCP, AI agents)" },
+            { "value": "skill_market", "label": "Skill marketplaces" },
+            { "value": "homebrew", "label": "Homebrew" },
+            { "value": "producthunt", "label": "Product Hunt / social launch" }
+          ]
+        },
+        {
+          "id": "mcp_registry",
+          "type": "single",
+          "label": "Publish to the official MCP registry?",
+          "options": [
+            { "value": "yes", "label": "Yes, as soon as we can" },
+            { "value": "later", "label": "Later, once install is solid" },
+            { "value": "no", "label": "No" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Updates & trust",
+      "intro": "Installed is not the same as maintained and trusted.",
+      "questions": [
+        {
+          "id": "updates",
+          "type": "single",
+          "label": "How should updates work?",
+          "options": [
+            { "value": "npm", "label": "npm handles it — don't add anything" },
+            { "value": "self", "label": "A `brainstormform update` command" },
+            { "value": "notice", "label": "A gentle version notice when outdated" },
+            { "value": "none", "label": "Ignore updates for now" }
+          ]
+        },
+        {
+          "id": "trust_signals",
+          "type": "multi",
+          "label": "Which trust signals matter for getting agents and teams to adopt it?",
+          "options": [
+            { "value": "no_telemetry", "label": "A clear 'no telemetry, local-only' statement" },
+            { "value": "audit", "label": "A `doctor` / audit command" },
+            { "value": "signed", "label": "Signed releases" },
+            { "value": "checksums", "label": "Published checksums" },
+            { "value": "repro", "label": "Reproducible builds" },
+            { "value": "permissions", "label": "An explicit list of what it touches on disk" }
+          ]
+        },
+        {
+          "id": "versioning",
+          "type": "single",
+          "label": "What should we tell agents about versions?",
+          "options": [
+            { "value": "latest", "label": "Always use the latest" },
+            { "value": "pin", "label": "Pin a version for reproducibility" },
+            { "value": "either", "label": "Let the user decide" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Open",
+      "questions": [
+        {
+          "id": "friction",
+          "type": "textarea",
+          "label": "What is the biggest install or discovery friction you can imagine?",
+          "placeholder": "Anything that would make an agent or a human give up…"
+        },
+        {
+          "id": "priority",
+          "type": "single",
+          "label": "What is the single most valuable next step?",
+          "required": true,
+          "allowOther": true,
+          "options": [
+            { "value": "npm", "label": "Publish to npm so npx works everywhere" },
+            { "value": "setup", "label": "One-command `setup` that configures agents" },
+            { "value": "binary", "label": "A no-Node standalone binary" },
+            { "value": "claude_plugin", "label": "A Claude Code plugin / marketplace listing" },
+            { "value": "llms", "label": "llms.txt + AGENTS.md + registries" },
+            { "value": "doctor", "label": "A `doctor` diagnostic command" },
+            { "value": "more_agents", "label": "Broader agent support (Cursor, Gemini, …)" }
+          ]
+        },
+        {
+          "id": "else",
+          "type": "textarea",
+          "label": "Anything else on making this easy to adopt?",
+          "placeholder": "Ideas, examples of tools that did this well, wishes…"
+        }
+      ]
+    }
+  ]
+}
