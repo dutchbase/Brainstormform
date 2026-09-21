@@ -1,0 +1,11 @@
+#!/usr/bin/env node
+import { main } from '../src/cli.mjs';
+
+main(process.argv.slice(2))
+  .then((code) => {
+    if (typeof code === 'number') process.exitCode = code;
+  })
+  .catch((err) => {
+    process.stderr.write('brainstormform: ' + (err && err.message ? err.message : String(err)) + '\n');
+    process.exitCode = 1;
+  });

@@ -1,0 +1,67 @@
+{
+  "title": "Project kickoff brainstorm",
+  "intro": "A few questions to nail down scope. Anything marked * is required, the rest you can skip.",
+  "settings": { "pageSize": 4 },
+  "categories": [
+    {
+      "title": "Scope",
+      "questions": [
+        {
+          "id": "goal",
+          "type": "textarea",
+          "label": "What is the primary goal?",
+          "help": "One or two sentences is plenty.",
+          "required": true,
+          "placeholder": "e.g. Ship a v1 landing page by June"
+        },
+        {
+          "id": "platforms",
+          "type": "multi",
+          "label": "Which platforms must we support?",
+          "options": [
+            { "value": "web", "label": "Web" },
+            { "value": "ios", "label": "iOS" },
+            { "value": "android", "label": "Android" }
+          ],
+          "allowOther": true
+        },
+        {
+          "id": "urgency",
+          "type": "scale",
+          "label": "How urgent is this?",
+          "min": 1,
+          "max": 5,
+          "scaleLabels": ["Whenever", "Very urgent"]
+        }
+      ]
+    },
+    {
+      "title": "Design",
+      "questions": [
+        {
+          "id": "mood",
+          "type": "single",
+          "label": "Pick a visual direction",
+          "options": [
+            { "value": "minimal", "label": "Minimal", "description": "Whitespace, few colors" },
+            { "value": "bold", "label": "Bold", "description": "Strong colors and type" }
+          ],
+          "allowOther": true
+        },
+        {
+          "id": "dark_mode",
+          "type": "boolean",
+          "label": "Do we need dark mode at launch?"
+        },
+        {
+          "id": "references",
+          "type": "file",
+          "label": "Upload any reference images or documents",
+          "multiple": true,
+          "accept": "image/*,.pdf",
+          "maxFiles": 5
+        }
+      ]
+    }
+  ]
+}

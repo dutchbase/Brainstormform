@@ -1,0 +1,46 @@
+{
+  "name": "brainstormform",
+  "version": "0.1.0",
+  "description": "Local web forms that let AI agents ask unlimited brainstorming questions.",
+  "type": "module",
+  "bin": {
+    "brainstormform": "bin/brainstormform"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node --test test/",
+    "start": "node src/cli.mjs"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "mcp",
+    "claude-code",
+    "codex",
+    "opencode",
+    "brainstorm",
+    "questions",
+    "forms",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dutchbase/brainstormform.git"
+  },
+  "homepage": "https://github.com/dutchbase/brainstormform#readme",
+  "bugs": {
+    "url": "https://github.com/dutchbase/brainstormform/issues"
+  },
+  "author": "dutchbase",
+  "license": "MIT"
+}

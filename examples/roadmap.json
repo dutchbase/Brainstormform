@@ -1,0 +1,352 @@
+{
+  "title": "Brainstormform — what next?",
+  "intro": "This form is itself built with Brainstormform. ~28 questions across 6 pages, only the last one is required. Pick what matters and skip the rest. Your answers come straight back to the agent.",
+  "settings": { "pageSize": 5, "submitLabel": "Send answers to the agent" },
+  "categories": [
+    {
+      "title": "How agents use it",
+      "questions": [
+        {
+          "id": "agent_wait",
+          "type": "single",
+          "label": "When an agent asks a batch of questions, what should happen by default?",
+          "allowOther": true,
+          "options": [
+            { "value": "block", "label": "Block until the user submits", "description": "One call, one result — simplest agent code, but can hit command timeouts" },
+            { "value": "return_url", "label": "Return the URL right away; the agent waits separately", "description": "Current behaviour. Robust against agent timeouts" },
+            { "value": "notify", "label": "Push a notification to the agent on submit", "description": "Needs MCP; the agent stays free in the meantime" },
+            { "value": "per_call", "label": "Let the agent choose per call", "description": "Most flexible, slightly more to document" }
+          ]
+        },
+        {
+          "id": "ready_signal",
+          "type": "multi",
+          "label": "How should the agent find out the answers are ready?",
+          "allowOther": true,
+          "options": [
+            { "value": "poll", "label": "Poll with wait/get", "description": "Current" },
+            { "value": "mcp_notify", "label": "MCP notification", "description": "Server pushes to the client" },
+            { "value": "watch", "label": "Watch a file on disk", "description": "Agent reacts to a filesystem event" },
+            { "value": "webhook", "label": "Call a command / webhook", "description": "Server runs something on submit" },
+            { "value": "chat", "label": "Nothing automatic — the user says 'done' in chat" }
+          ]
+        },
+        {
+          "id": "concurrency",
+          "type": "single",
+          "label": "Should several forms be open at once (e.g. parallel sub-agents)?",
+          "options": [
+            { "value": "single", "label": "One at a time is fine" },
+            { "value": "tabs", "label": "Multiple, each its own tab/session" },
+            { "value": "index", "label": "Multiple, with an index page listing them all" }
+          ]
+        },
+        {
+          "id": "resume",
+          "type": "single",
+          "label": "If the browser is closed halfway, what should happen to partial answers?",
+          "options": [
+            { "value": "browser", "label": "Restore from browser storage", "description": "Current — survives refresh, lost if storage cleared" },
+            { "value": "server", "label": "Save a server-side draft", "description": "Survives a different browser/device" },
+            { "value": "discard", "label": "Discard and start over" },
+            { "value": "partial", "label": "Offer to submit whatever is filled in" }
+          ]
+        },
+        {
+          "id": "discovery",
+          "type": "multi",
+          "label": "How should agents learn the question format?",
+          "options": [
+            { "value": "guide", "label": "CLI `guide` command", "description": "Current" },
+            { "value": "schema", "label": "`schema` JSON", "description": "Current" },
+            { "value": "mcp_desc", "label": "The MCP tool description" },
+            { "value": "readme", "label": "README examples" },
+            { "value": "prompt", "label": "A bundled system-prompt snippet to paste into the agent" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Questions you can ask",
+      "questions": [
+        {
+          "id": "next_types",
+          "type": "multi",
+          "label": "Which new question types would you actually use?",
+          "allowOther": true,
+          "options": [
+            { "value": "ranking", "label": "Ranking / drag to order" },
+            { "value": "matrix", "label": "Matrix / grid (rows × columns)" },
+            { "value": "date", "label": "Date & time picker" },
+            { "value": "conditional", "label": "Conditional follow-up questions" },
+            { "value": "visual", "label": "Image / visual choice" },
+            { "value": "code", "label": "Code or JSON editor" },
+            { "value": "slider", "label": "Continuous slider" },
+            { "value": "currency", "label": "Currency / units" }
+          ]
+        },
+        {
+          "id": "branching",
+          "type": "single",
+          "label": "Conditional logic — show question 3 only when question 1 is a certain answer?",
+          "options": [
+            { "value": "essential", "label": "Essential, I'd use it often" },
+            { "value": "later", "label": "Nice to have later" },
+            { "value": "no", "label": "No, keep it flat" }
+          ]
+        },
+        {
+          "id": "review",
+          "type": "single",
+          "label": "Before submitting, should there be a review screen?",
+          "options": [
+            { "value": "full", "label": "Yes — full review with edit links" },
+            { "value": "compact", "label": "Yes — a compact summary only" },
+            { "value": "no", "label": "No — just validate the required fields" }
+          ]
+        },
+        {
+          "id": "prefilled",
+          "type": "single",
+          "label": "Should the agent be able to suggest answers?",
+          "options": [
+            { "value": "defaults", "label": "Yes — editable pre-filled defaults" },
+            { "value": "placeholder", "label": "Yes — but only as placeholders/hints" },
+            { "value": "no", "label": "No — blank is cleaner" }
+          ]
+        },
+        {
+          "id": "markdown",
+          "type": "single",
+          "label": "Should question labels and help text render Markdown?",
+          "options": [
+            { "value": "yes", "label": "Yes — bold, links, inline code" },
+            { "value": "safe", "label": "Yes, but plain text only for safety" },
+            { "value": "no", "label": "No — keep it plain" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Look & feel",
+      "questions": [
+        {
+          "id": "style",
+          "type": "single",
+          "label": "Where should the visual style go from here?",
+          "allowOther": true,
+          "options": [
+            { "value": "keep", "label": "Keep the current look" },
+            { "value": "compact", "label": "More compact / denser" },
+            { "value": "spacious", "label": "More spacious and calm" },
+            { "value": "playful", "label": "More playful / illustrated" },
+            { "value": "minimal", "label": "More monochrome / minimal" }
+          ]
+        },
+        {
+          "id": "motion",
+          "type": "single",
+          "label": "How much animation do you want?",
+          "options": [
+            { "value": "current", "label": "Current — subtle" },
+            { "value": "none", "label": "Instant / none" },
+            { "value": "more", "label": "A bit more expressive" }
+          ]
+        },
+        {
+          "id": "progress",
+          "type": "single",
+          "label": "How should progress be shown?",
+          "options": [
+            { "value": "bar", "label": "Progress bar", "description": "Current" },
+            { "value": "dots", "label": "Page dots" },
+            { "value": "count", "label": "“3 of 20” counter" },
+            { "value": "stepper", "label": "Category stepper" },
+            { "value": "combo", "label": "A combination" }
+          ]
+        },
+        {
+          "id": "keyboard",
+          "type": "multi",
+          "label": "Which keyboard shortcuts are worth adding?",
+          "options": [
+            { "value": "numbers", "label": "1–9 to pick an option" },
+            { "value": "enter", "label": "Enter to advance (outside text fields)" },
+            { "value": "submit", "label": "Cmd/Ctrl+Enter to submit" },
+            { "value": "jump", "label": "Number keys to jump between pages" },
+            { "value": "esc", "label": "Esc to clear / collapse the current question" }
+          ]
+        },
+        {
+          "id": "mobile",
+          "type": "single",
+          "label": "How important is answering on a phone?",
+          "options": [
+            { "value": "critical", "label": "Critical — design mobile-first" },
+            { "value": "nice", "label": "Nice to have" },
+            { "value": "desktop", "label": "Desktop only" }
+          ]
+        },
+        {
+          "id": "a11y",
+          "type": "single",
+          "label": "What accessibility target should we hold ourselves to?",
+          "options": [
+            { "value": "basics", "label": "Solid basics", "description": "Current: labels, keyboard, reduced motion" },
+            { "value": "aa", "label": "WCAG AA" },
+            { "value": "aaa", "label": "WCAG AAA" },
+            { "value": "low", "label": "Not a priority right now" }
+          ]
+        },
+        {
+          "id": "theme",
+          "type": "single",
+          "label": "How much theming do you need?",
+          "options": [
+            { "value": "auto", "label": "Auto light/dark from the system", "description": "Current" },
+            { "value": "brand", "label": "A custom accent/brand colour per form" },
+            { "value": "presets", "label": "Several built-in themes to choose from" },
+            { "value": "css", "label": "A full custom CSS override hook" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Answers & output",
+      "questions": [
+        {
+          "id": "formats",
+          "type": "multi",
+          "label": "Which output formats should the agent be able to request?",
+          "options": [
+            { "value": "json", "label": "JSON", "description": "Current" },
+            { "value": "markdown", "label": "Markdown" },
+            { "value": "yaml", "label": "YAML" },
+            { "value": "transcript", "label": "Plain-text transcript" },
+            { "value": "csv", "label": "CSV for tabular answers" }
+          ]
+        },
+        {
+          "id": "extras",
+          "type": "multi",
+          "label": "What extra metadata should come back with the answers?",
+          "options": [
+            { "value": "timing", "label": "Time spent per question" },
+            { "value": "summary", "label": "A rendered human-readable summary" },
+            { "value": "transcript", "label": "A full Q&A transcript" },
+            { "value": "revision", "label": "A spec revision id / hash" },
+            { "value": "skipped", "label": "Distinguish skipped vs unanswered" }
+          ]
+        },
+        {
+          "id": "history",
+          "type": "single",
+          "label": "Should past brainstorms be kept around?",
+          "options": [
+            { "value": "ephemeral", "label": "No — ephemeral only", "description": "Current" },
+            { "value": "archive", "label": "Optional local archive" },
+            { "value": "search", "label": "Searchable history with a browser UI" }
+          ]
+        },
+        {
+          "id": "files",
+          "type": "multi",
+          "label": "Which file-upload improvements are worth doing?",
+          "allowOther": true,
+          "options": [
+            { "value": "repo", "label": "Save into a repo-relative folder" },
+            { "value": "zip", "label": "Zip all uploads into one archive" },
+            { "value": "describe", "label": "Auto-describe images (OCR / caption)" },
+            { "value": "preview", "label": "Thumbnails & type-aware previews" },
+            { "value": "cleanup", "label": "Auto-delete uploads after reading", "description": "Current" }
+          ]
+        },
+        {
+          "id": "export",
+          "type": "multi",
+          "label": "How should the user be able to save or export their answers?",
+          "options": [
+            { "value": "json", "label": "Download JSON", "description": "Current" },
+            { "value": "markdown", "label": "Download Markdown", "description": "Current" },
+            { "value": "clipboard", "label": "Copy to clipboard" },
+            { "value": "pdf", "label": "PDF" },
+            { "value": "repo", "label": "Write straight into the repo / a git commit" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Distribution & roadmap",
+      "questions": [
+        {
+          "id": "packaging",
+          "type": "multi",
+          "label": "How should Brainstormform be distributed?",
+          "options": [
+            { "value": "npx", "label": "npm package run via npx" },
+            { "value": "global", "label": "Global install", "description": "npm link works today" },
+            { "value": "binary", "label": "Standalone single binary", "description": "No Node required" },
+            { "value": "docker", "label": "Docker image" },
+            { "value": "source", "label": "Keep running from source" }
+          ]
+        },
+        {
+          "id": "remote",
+          "type": "single",
+          "label": "Will you ever need to answer from a different machine?",
+          "allowOther": true,
+          "options": [
+            { "value": "local", "label": "No — local-only stays a security feature" },
+            { "value": "tunnel", "label": "Maybe — document an SSH tunnel" },
+            { "value": "builtin", "label": "Yes — build in a secure tunnel" },
+            { "value": "hosted", "label": "Yes — a hosted/cloud version" }
+          ]
+        },
+        {
+          "id": "multiuser",
+          "type": "single",
+          "label": "A single form filled in by several people?",
+          "options": [
+            { "value": "no", "label": "No — single user" },
+            { "value": "responses", "label": "Yes — collect multiple separate responses" },
+            { "value": "collab", "label": "Yes — several people editing the same form" }
+          ]
+        },
+        {
+          "id": "hardening",
+          "type": "multi",
+          "label": "Which security/privacy work matters?",
+          "options": [
+            { "value": "host", "label": "Localhost bind + token + host check", "description": "Already done" },
+            { "value": "shutdown", "label": "Auto-shutdown when idle", "description": "Already done (60 min default)" },
+            { "value": "nodisk", "label": "Never persist anything to disk" },
+            { "value": "encrypt", "label": "Encrypt stored sessions" },
+            { "value": "audit", "label": "An audit log of sessions" }
+          ]
+        },
+        {
+          "id": "priority",
+          "type": "single",
+          "label": "What is the single most valuable next improvement?",
+          "required": true,
+          "allowOther": true,
+          "options": [
+            { "value": "types", "label": "New question types (ranking, matrix, date…)" },
+            { "value": "conditional", "label": "Conditional / branching logic" },
+            { "value": "notify", "label": "MCP push notifications on submit" },
+            { "value": "history", "label": "Answer history & searchable archive" },
+            { "value": "dist", "label": "Packaging & distribution (binary / npx)" },
+            { "value": "review", "label": "Review screen before submit" },
+            { "value": "polish", "label": "Visual & UX polish" }
+          ]
+        },
+        {
+          "id": "else",
+          "type": "textarea",
+          "label": "Anything else on your mind for Brainstormform?",
+          "placeholder": "Ideas, annoyances, wishes…"
+        }
+      ]
+    }
+  ]
+}
