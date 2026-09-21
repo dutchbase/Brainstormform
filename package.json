@@ -11,9 +11,12 @@
     "src",
     "skills",
     "examples",
+    "docs",
     "install.sh",
     "AGENTS.md",
     "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "LICENSE"
   ],
   "engines": {
@@ -38,11 +41,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dutchbase/brainstormform.git"
+    "url": "git+https://github.com/dutchbase/Brainstormform.git"
   },
-  "homepage": "https://github.com/dutchbase/brainstormform#readme",
+  "homepage": "https://github.com/dutchbase/Brainstormform#readme",
   "bugs": {
-    "url": "https://github.com/dutchbase/brainstormform/issues"
+    "url": "https://github.com/dutchbase/Brainstormform/issues"
   },
   "author": "dutchbase",
   "license": "MIT"

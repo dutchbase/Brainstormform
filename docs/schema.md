@@ -6,7 +6,7 @@ A form is a JSON spec. Pass it to `brainstormform ask` (from a file or stdin).
 
 ```jsonc
 {
-  "title": "Project kickoff",          // required
+  "title": "Project kickoff",          // optional, defaults to "Brainstorm"
   "intro": "Optional **Markdown** intro shown at the top.",
   "settings": {
     "pageSize": 5,                     // questions per page (default 5)
@@ -48,7 +48,7 @@ Every question needs a `type` and a `label`.
 | `multi` | `options`, `allowOther` |
 | `visual` | `options` with `image`, `multiple` |
 | `text` / `textarea` | |
-| `number` | `min`, `max`, `step` (required) |
+| `number` | `min`, `max` (required), `step` (default 1) |
 | `scale` | `min`, `max`, `scaleLabels` (default 1–5) |
 | `boolean` | |
 | `file` | `accept`, `multiple`, `maxFiles` |
@@ -60,8 +60,9 @@ Options look like:
 ```
 
 For `visual`, each option also needs an `image`: an `https://` URL or a path to a
-local file. Local files are served through a safe, whitelisted route — the
-browser never reads arbitrary paths.
+local file. Local paths are resolved relative to the directory you run `ask`
+from and must stay inside it; they are served through a safe, whitelisted route
+so the browser never reads arbitrary paths.
 
 ### Conditional questions (`showIf`)
 
@@ -103,6 +104,7 @@ When the user presses Finish, `brainstormform wait` prints:
     "mood":      { "type": "visual", "value": "minimal" },
     "references":{ "type": "file", "value": [{ "name":"x.png", "path":"/abs/path", "size":123, "mime":"image/png" }] }
   },
+  "notes": { "platforms": "mostly web, iOS later" },
   "skipped": ["notes"],
   "unanswered": [],
   "hidden": ["appstore"]
@@ -112,6 +114,9 @@ When the user presses Finish, `brainstormform wait` prints:
 - `skipped` — optional questions the user left blank or explicitly skipped.
 - `unanswered` — required questions still empty (empty when validation passes).
 - `hidden` — questions hidden by `showIf`, excluded from the answers.
+- `notes` — free-text annotations keyed by question id. Every question offers an
+  "Add a note" control, so a user can qualify an answer or explain why none of
+  the options fit. Agents should read these alongside the answers.
 
 ## Schema
 

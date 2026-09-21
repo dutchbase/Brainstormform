@@ -17,4 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Syntax check
+        run: for f in src/*.mjs; do node --check "$f"; done
       - run: npm test

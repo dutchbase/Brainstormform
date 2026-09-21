@@ -7,6 +7,7 @@ import fsp from 'node:fs/promises';
 import { normalizeSpec, normalizeFragment, SpecError } from '../src/schema.mjs';
 import { startServer } from '../src/server.mjs';
 import { handle as mcpHandle } from '../src/mcp.mjs';
+import { createSession, waitForAnswers, stopSession, sessionDir } from '../src/session.mjs';
 
 test('normalizeSpec wraps flat questions and applies defaults', () => {
   const spec = normalizeSpec({ title: 'Hi', questions: [{ id: 'a', type: 'text', label: 'A' }] });
@@ -141,10 +142,11 @@ test('end-to-end: live progress, append, submit, host guard, assets', async () =
 
 test('server rewrites local visual images to a safe asset route', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-asset-'));
-  const img = path.join(dir, 'ref.png');
-  await fsp.writeFile(img, Buffer.from([137, 80, 78, 71]));
+  const prev = process.cwd();
+  process.chdir(dir);
+  await fsp.writeFile(path.join(dir, 'ref.png'), Buffer.from([137, 80, 78, 71]));
   const spec = normalizeSpec({
-    questions: [{ id: 'v', type: 'visual', label: 'Pick', options: [{ value: 'a', image: img }] }],
+    questions: [{ id: 'v', type: 'visual', label: 'Pick', options: [{ value: 'a', image: 'ref.png' }] }],
   });
   const token = 'asset-token';
   const srv = await startServer({ sessionDir: path.join(dir, 'session'), spec, token });
@@ -157,8 +159,27 @@ test('server rewrites local visual images to a safe asset route', async () => {
     const missing = await fetch(`${base}/api/asset/9`);
     assert.equal(missing.status, 404);
   } finally {
+    process.chdir(prev);
     await srv.close();
     await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('local images outside the working directory are not served', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-outside-'));
+  const outside = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-secret-'));
+  await fsp.writeFile(path.join(outside, 'secret.png'), Buffer.from([137, 80, 78, 71]));
+  const spec = normalizeSpec({
+    questions: [{ id: 'v', type: 'visual', label: 'Pick', options: [{ value: 'a', image: path.join(outside, 'secret.png') }] }],
+  });
+  const srv = await startServer({ sessionDir: path.join(dir, 'session'), spec, token: 'asset-token' });
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${srv.port}/s/asset-token/api/questions`)).json();
+    assert.equal(body.spec.categories[0].questions[0].options[0].image, path.join(outside, 'secret.png'));
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.rm(outside, { recursive: true, force: true });
   }
 });
 
@@ -178,4 +199,68 @@ test('mcp: initialize, tools/list, resources, ping and errors', async () => {
   assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 4, method: 'ping' })).result, {});
   assert.equal((await mcpHandle({ jsonrpc: '2.0', id: 5, method: 'nope' })).error.code, -32601);
   assert.equal(await mcpHandle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);
+});
+
+test('scale step must be positive and maxFiles is clamped to at least one', () => {
+  assert.throws(() => normalizeSpec({ questions: [{ type: 'scale', label: 's', step: 0 }] }), SpecError);
+  assert.throws(() => normalizeSpec({ questions: [{ type: 'scale', label: 's', step: -1 }] }), SpecError);
+  const ok = normalizeSpec({ questions: [{ type: 'scale', label: 's', step: 0.5 }] });
+  assert.equal(ok.categories[0].questions[0].step, 0.5);
+  const file = normalizeSpec({ questions: [{ type: 'file', label: 'f', multiple: true, maxFiles: 0 }] });
+  assert.equal(file.categories[0].questions[0].maxFiles, 1);
+});
+
+test('sessionDir rejects ids that could escape the session root', () => {
+  assert.throws(() => sessionDir('../../etc'));
+  assert.throws(() => sessionDir('foo'));
+  assert.throws(() => sessionDir('bf-..'));
+  assert.ok(sessionDir('bf-abc-123').endsWith('bf-abc-123'));
+});
+
+test('waitForAnswers with timeout 0 returns immediately instead of blocking', async () => {
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }] });
+  const { id } = await createSession(spec, {});
+  try {
+    const start = Date.now();
+    const res = await waitForAnswers(id, { timeoutMs: 0 });
+    assert.equal(res.error, 'timeout');
+    assert.ok(Date.now() - start < 2000, 'should not block');
+  } finally {
+    await stopSession(id);
+  }
+});
+
+test('progress and submit round-trip per-question notes', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-notes-'));
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'single', label: 'A', options: [{ value: 'x' }] }] });
+  const token = 'note'.repeat(8);
+  const srv = await startServer({ sessionDir: dir, spec, token });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    await fetch(`${base}/api/progress`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: { a: 'x' }, other: {}, notes: { a: 'close, but not quite' }, skipped: [] }),
+    });
+    const progress = JSON.parse(await fsp.readFile(path.join(dir, 'progress.json'), 'utf8'));
+    assert.equal(progress.notes.a, 'close, but not quite');
+
+    await fetch(`${base}/api/submit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: { a: { type: 'single', value: 'x' } }, notes: { a: 'close, but not quite' }, skipped: [], unanswered: [], hidden: [] }),
+    });
+    const record = JSON.parse(await fsp.readFile(path.join(dir, 'answers.json'), 'utf8'));
+    assert.equal(record.notes.a, 'close, but not quite');
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('the published package includes its docs and changelog', async () => {
+  const pkg = JSON.parse(await fsp.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  for (const entry of ['docs', 'skills', 'CHANGELOG.md', 'CONTRIBUTING.md']) {
+    assert.ok(pkg.files.includes(entry), 'package.json files should include ' + entry);
+  }
 });

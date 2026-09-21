@@ -32,7 +32,7 @@ Print what the user has answered so far, without ending the session.
 
 ```bash
 brainstormform progress bf-...
-# { sessionId, status, revision, answered, answers, other, skipped, url }
+# { sessionId, status, revision, answered, answers, other, notes, skipped, url }
 ```
 
 ## add
@@ -56,6 +56,7 @@ brainstormform get bf-...                  # non-blocking poll (exit 4 while ope
 ```
 
 `wait` exits `3` on timeout (call it again) and `5` if the server exited.
+`--timeout 0` returns immediately, which is handy for polling without blocking.
 
 ## export / archive
 

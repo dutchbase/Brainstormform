@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { normalizeSpec, schemaText, guideText, VERSION, SpecError } from './schema.mjs';
+import { parseArgs } from './args.mjs';
 import {
   createSession,
   startDetachedServer,
@@ -25,22 +26,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstormform', 'SKILL.md');
 
 let JSON_MODE = false;
-
-function parseArgs(argv) {
-  const out = { _: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg.startsWith('--')) {
-      const [key, value] = arg.slice(2).split('=');
-      if (value !== undefined) out[key] = value;
-      else if (argv[i + 1] && !argv[i + 1].startsWith('--')) out[key] = argv[++i];
-      else out[key] = true;
-    } else {
-      out._.push(arg);
-    }
-  }
-  return out;
-}
 
 function print(value) {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
@@ -130,7 +115,8 @@ async function cmdAsk(args) {
 async function cmdWait(args) {
   const id = args._[0];
   if (!id) return fail('usage: brainstormform wait <sessionId> [--timeout seconds]');
-  const timeoutMs = args.timeout !== undefined ? Number(args.timeout) * 1000 : 600000;
+  const seconds = args.timeout !== undefined ? Number(args.timeout) : 600;
+  const timeoutMs = Number.isFinite(seconds) ? Math.max(0, seconds) * 1000 : 600000;
   const { answers, meta, error } = await waitForAnswers(id, { timeoutMs });
   if (answers) {
     await deliver(id, answers, meta);
@@ -162,7 +148,7 @@ async function cmdProgress(args) {
   const dir = sessionDir(id);
   const meta = await readJson(path.join(dir, 'meta.json'), null);
   if (!meta) return fail('unknown session "' + id + '".', 1);
-  const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, skipped: [] };
+  const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
   print({
     sessionId: id,
@@ -172,6 +158,7 @@ async function cmdProgress(args) {
     answered: Object.keys(progress.answers || {}).length,
     answers: (final && final.answers) || progress.answers || {},
     other: progress.other || {},
+    notes: (final && final.notes) || progress.notes || {},
     skipped: progress.skipped || [],
   });
   return 0;

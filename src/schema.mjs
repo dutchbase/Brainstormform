@@ -1,4 +1,7 @@
-export const VERSION = '0.3.0';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+export const VERSION = pkg.version;
 
 export class SpecError extends Error {
   constructor(message) {
@@ -101,14 +104,22 @@ function normalizeQuestion(input, where, state) {
       throw new SpecError(`${where} of type "number" requires numeric "min" and "max".`);
     }
     if (q.min >= q.max) throw new SpecError(`${where}.min must be less than max.`);
-    q.step = Number.isFinite(input.step) ? input.step : 1;
+    if (input.step !== undefined) {
+      const step = Number(input.step);
+      if (!Number.isFinite(step) || step <= 0) {
+        throw new SpecError(`${where}.step must be a positive number.`);
+      }
+      q.step = step;
+    } else {
+      q.step = 1;
+    }
     if (Array.isArray(input.scaleLabels)) q.scaleLabels = input.scaleLabels.map((s) => String(s));
   }
 
   if (input.type === 'file') {
     q.accept = input.accept != null ? String(input.accept) : '*/*';
     q.multiple = input.multiple === true;
-    q.maxFiles = Number.isFinite(input.maxFiles) ? input.maxFiles : q.multiple ? 5 : 1;
+    q.maxFiles = Number.isFinite(input.maxFiles) ? Math.max(1, Math.floor(input.maxFiles)) : q.multiple ? 5 : 1;
   }
 
   state.seen.add(id);
@@ -410,6 +421,10 @@ Question:
 - file: accept?, multiple?, maxFiles?
 - text/textarea: placeholder?
 
+Every question also accepts a free-text **note** from the user, returned in
+"notes" keyed by question id. Encourage the user to add one when none of the
+options quite fits or they want to qualify an answer.
+
 "add" appends new questions to a running form. Existing questions cannot be changed.
 
 ## Example
@@ -425,6 +440,7 @@ ${JSON.stringify(EXAMPLE, null, 2)}
     "platforms": { "type": "multi", "value": ["web","ios"], "other": "desktop" },
     "urgency":   { "type": "scale", "value": 4 }
   },
+  "notes": { "urgency": "urgent, but not at the cost of quality" },
   "skipped": ["notes"],
   "unanswered": [],
   "hidden": ["appstore"]

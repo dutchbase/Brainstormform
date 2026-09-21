@@ -131,7 +131,7 @@ const WAIT_SCHEMA = {
   type: 'object',
   properties: {
     sessionId: { type: 'string' },
-    timeoutSeconds: { type: 'number', description: 'How long to wait for Finish (default 600)' },
+    timeoutSeconds: { type: 'number', description: 'How long to wait for Finish (default 600); 0 returns immediately so you can poll' },
   },
   required: ['sessionId'],
 };
@@ -163,7 +163,7 @@ async function callRead(args) {
   const dir = sessionDir(sessionId);
   const meta = await readJson(path.join(dir, 'meta.json'), null);
   if (!meta) return textResult('Unknown session "' + sessionId + '".', true);
-  const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, skipped: [] };
+  const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
   return textResult({
     sessionId,
@@ -173,6 +173,7 @@ async function callRead(args) {
     answered: Object.keys(progress.answers || {}).length,
     answers: (final && final.answers) || progress.answers || {},
     other: progress.other || {},
+    notes: (final && final.notes) || progress.notes || {},
     skipped: progress.skipped || [],
   });
 }
@@ -197,9 +198,9 @@ async function callAdd(args) {
 async function callWait(args) {
   const sessionId = args && args.sessionId;
   if (!sessionId) return textResult('sessionId is required', true);
-  const timeoutSeconds = args.timeoutSeconds === undefined ? 600 : args.timeoutSeconds;
+  const timeoutSeconds = args.timeoutSeconds === undefined ? 600 : Number(args.timeoutSeconds);
   const { answers, meta, error } = await waitForAnswers(sessionId, {
-    timeoutMs: timeoutSeconds > 0 ? timeoutSeconds * 1000 : 1,
+    timeoutMs: Number.isFinite(timeoutSeconds) ? Math.max(0, timeoutSeconds) * 1000 : 600000,
   });
   if (answers) return textResult(await finish(sessionId, answers, meta));
   if (error === 'unknown-session') return textResult('Unknown session "' + sessionId + '".', true);
@@ -226,12 +227,12 @@ export async function handle(msg) {
         {
           name: 'ask_questions',
           description:
-            'Open a live, paginated local web form with any number of questions (single/multi choice, image cards, text, number/scale, boolean, file upload), grouped into categories and optionally conditional. Returns a sessionId and url. Answers are saved as the user types; call read_answers to see progress and add_questions to append follow-ups while they are still answering. Prefer this over a built-in question tool when there are more than ~6 questions, when questions need sections, files or follow-ups, or when the user asked for a brainstorm.',
+            'Open a live, paginated local web form with any number of questions (single/multi choice, image cards, text, number/scale, boolean, file upload), grouped into categories and optionally conditional. Returns a sessionId and url. Answers are saved as the user types; call read_answers to see progress and add_questions to append follow-ups while they are still answering. Every question also accepts a free-text note from the user, returned in "notes" keyed by question id — tell the user they can annotate any answer, it is the right place when no option fits. Prefer this over a built-in question tool when there are more than ~6 questions, when questions need sections, files or follow-ups, or when the user asked for a brainstorm.',
           inputSchema: ASK_SCHEMA,
         },
         {
           name: 'read_answers',
-          description: 'Read the answers the user has entered so far in a live session (non-blocking), plus submission status.',
+          description: 'Read the answers the user has entered so far in a live session (non-blocking), plus submission status and any per-question notes.',
           inputSchema: READ_SCHEMA,
         },
         {
@@ -299,7 +300,9 @@ export function runMcp() {
     chain = chain.then(async () => {
       const responses = [];
       for (const m of messages) {
-        const response = await handle(m);
+        const response = await handle(m).catch((err) =>
+          error(m && m.id !== undefined ? m.id : null, -32603, 'Internal error: ' + (err && err.message ? err.message : String(err))),
+        );
         if (response) responses.push(response);
       }
       if (responses.length === 1) send(responses[0]);

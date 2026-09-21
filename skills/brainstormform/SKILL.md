@@ -96,6 +96,9 @@ Run `brainstormform guide` for the full format. Quick summary:
 - Mark only genuinely required questions as `required: true`.
 - Prefer `single`/`multi` with concrete options over open text; add `allowOther`
   when options may not cover everything.
+- Tell the user they can add a **note** to any question, and read the `notes`
+  map in the answers. A single choice often has no clean correct option; the note
+  is where the nuance goes, so ask questions that invite it.
 - Use `scale` for intensity and `boolean` for yes/no.
 - Add `showIf` so the form stays short and relevant.
 - Keep `id`s stable and readable; you reference them in `showIf` and answers.

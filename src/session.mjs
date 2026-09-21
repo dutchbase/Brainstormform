@@ -23,7 +23,9 @@ export function stateRoot() {
 }
 
 export function sessionDir(id) {
-  return path.join(sessionsRoot(), id);
+  const safe = String(id == null ? '' : id);
+  if (!/^bf-[a-z0-9-]+$/i.test(safe)) throw new Error('invalid session id "' + safe + '".');
+  return path.join(sessionsRoot(), safe);
 }
 
 export function metaPath(id) {
@@ -136,7 +138,7 @@ export async function waitForAnswers(id, { timeoutMs = 600000, pollMs = 300 } = 
       if (late) return { answers: late, dir, meta };
       return { answers: null, dir, meta, error: 'server-exited' };
     }
-    if (timeoutMs > 0 && Date.now() - start >= timeoutMs) {
+    if (Number.isFinite(timeoutMs) && Date.now() - start >= timeoutMs) {
       return { answers: null, dir, meta, error: 'timeout' };
     }
     await sleep(pollMs);

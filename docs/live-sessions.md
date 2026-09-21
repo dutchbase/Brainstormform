@@ -70,3 +70,6 @@ event stream; the form then only reflects the questions present at load.
 - **Drafts are ephemeral.** `progress.json` lives in the session directory and is
   deleted with it. Only the final answers follow your `--keep` / `--out` /
   `--archive` settings.
+- **Notes.** Every question accepts an optional free-text note. Notes are saved
+  like answers, returned in the `notes` map keyed by question id, and are the
+  right place for the user to qualify an answer or say why no option fits.

@@ -8,12 +8,14 @@ notifications. Any MCP-capable agent can use it.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `ask_questions` | the form spec, `open`, `waitSeconds`, `keep` | `{ sessionId, url }` |
-| `read_answers` | `sessionId` | answers so far + `{ status, revision, answered }` |
+| `read_answers` | `sessionId` | answers so far + `{ status, revision, answered, notes }` |
 | `add_questions` | `sessionId`, `questions` or `categories` | `{ revision, questionCount }` |
 | `wait_for_answers` | `sessionId`, `timeoutSeconds` | final answers after Finish |
 
 `ask_questions` returns as soon as the form is live unless you pass
 `waitSeconds`, which blocks up to that long for the user to finish.
+`wait_for_answers` accepts `timeoutSeconds` (default 600); pass `0` to return
+immediately and poll instead of blocking.
 
 Typical flow:
 

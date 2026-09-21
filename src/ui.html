@@ -111,6 +111,11 @@
   .skip{background:transparent; border:none; color:var(--muted); cursor:pointer; font:inherit; font-size:13px; text-decoration:underline; text-underline-offset:2px; padding:2px 4px}
   .skip:hover{color:var(--text)}
   .skip.on{color:var(--accent)}
+  .note-wrap{margin-top:10px}
+  .note-toggle{background:transparent;border:none;color:var(--muted);cursor:pointer;font:inherit;font-size:13px;text-decoration:underline;text-underline-offset:2px;padding:2px 0}
+  .note-toggle:hover,.note-toggle.on{color:var(--accent)}
+  textarea.note{margin-top:8px;min-height:64px;font-size:14px}
+  .rv-note{margin-top:6px;font-size:13px;color:var(--muted);white-space:pre-wrap}
   .err{color:var(--danger); font-size:13.5px; margin:8px 0 0}
   .foot{position:sticky; bottom:0; z-index:20; background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--border)}
   .foot-in{max-width:840px; margin:0 auto; padding:13px 20px; display:flex; align-items:center; gap:12px; justify-content:space-between}
@@ -202,7 +207,7 @@ const mainEl = $('#main');
 
 const state = {
   spec: null, revision: 0, status: 'open', pages: [], page: 0, dir: 'fwd',
-  byId: {}, previews: {}, answers: {}, other: {}, skipped: {},
+  byId: {}, previews: {}, answers: {}, other: {}, skipped: {}, notes: {},
   submitted: false, review: false, startedAt: Date.now(),
 };
 
@@ -325,12 +330,16 @@ function questionHtml(q) {
 
   const skipped = state.skipped[q.id] && !isEmpty(val);
   const skipBtn = q.required ? '' : '<button type="button" class="skip' + (state.skipped[q.id] ? ' on' : '') + '" data-skip="' + escapeHtml(q.id) + '">' + (state.skipped[q.id] ? 'Skipped' : 'Skip') + '</button>';
+  const note = state.notes[q.id] || '';
+  const noteBlock = '<div class="note-wrap"><button type="button" class="note-toggle' + (note ? ' on' : '') + '" data-note="' + escapeHtml(q.id) + '">' + (note ? 'Note' : 'Add a note') + '</button>' +
+    '<textarea class="ta note" rows="2" data-note-field="' + escapeHtml(q.id) + '" placeholder="Nothing fits? Add context for this answer…"' + (note ? '' : ' hidden') + '>' + escapeHtml(note) + '</textarea></div>';
 
   return '<div class="q' + (skipped ? ' skipped' : '') + '" data-qid="' + escapeHtml(q.id) + '" data-type="' + q.type + '" role="group" aria-labelledby="lbl_' + escapeHtml(q.id) + '">' +
     '<div class="qlabel" id="lbl_' + escapeHtml(q.id) + '">' + renderInlineMarkdown(q.label) + (q.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</div>' +
     (q.intro ? '<div class="md">' + renderMarkdown(q.intro) + '</div>' : '') +
     (q.content ? '<div class="content md">' + renderMarkdown(q.content) + '</div>' : '') +
     body +
+    noteBlock +
     '<div class="q-foot"><span></span>' + skipBtn + '</div>' +
     '<p class="err" hidden></p>' +
     '</div>';
@@ -363,11 +372,17 @@ function refreshQuestion(id) {
 
 function updateFooter() {
   if (state.review || state.submitted) return;
+  $('#prev').hidden = false;
+  $('#next').hidden = false;
+  $('#pager').hidden = false;
+  $('#prev').textContent = '← Back';
   const nextIdx = nextPage();
   $('#prev').disabled = prevPage() < 0;
   $('#next').disabled = nextIdx < 0;
   const finishLabel = (state.spec.settings && state.spec.settings.finishLabel) || 'Finish';
   $('#finish').textContent = finishLabel;
+  const submitLabel = (state.spec.settings && state.spec.settings.submitLabel) || 'Continue';
+  $('#next').textContent = submitLabel + ' →';
   const visiblePages = state.pages.filter((_, i) => visibleOnPage(i).length).length;
   const passed = state.pages.slice(0, state.page + 1).filter((_, i) => visibleOnPage(i).length).length;
   $('#progressBar').style.width = (passed / visiblePages) * 100 + '%';
@@ -423,7 +438,12 @@ function validateAll() {
 
 function goToQuestion(id) {
   for (let i = 0; i < state.pages.length; i++) {
-    if (state.pages[i].questions.some((q) => q.id === id)) { state.page = i; state.dir = 'fwd'; render(); const el = qEl(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (state.pages[i].questions.some((q) => q.id === id)) {
+      state.page = i; state.dir = 'fwd'; render();
+      for (const q of state.pages[i].questions) showError(q.id, validateQuestion(q));
+      const el = qEl(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
   }
 }
 
@@ -467,11 +487,24 @@ function skippedIds() {
   }
   return [...out];
 }
+function skippedKeys() {
+  return Object.keys(state.skipped).filter((id) => state.skipped[id]);
+}
 function unansweredIds() {
   return allQuestions(state.spec).filter((q) => isVisibleQ(q) && q.required && isEmpty(state.answers[q.id]) && !state.skipped[q.id]).map((q) => q.id);
 }
 function hiddenIds() {
   return allQuestions(state.spec).filter((q) => !isVisibleQ(q)).map((q) => q.id);
+}
+function notesForSubmit() {
+  const hidden = new Set(hiddenIds());
+  const out = {};
+  for (const q of allQuestions(state.spec)) {
+    if (hidden.has(q.id)) continue;
+    const text = (state.notes[q.id] || '').trim();
+    if (text) out[q.id] = text;
+  }
+  return out;
 }
 
 function finish() {
@@ -483,7 +516,13 @@ function finish() {
 function editAnswers() { state.review = false; render(); }
 
 function renderReview() {
-  $('#foot').hidden = true;
+  const foot = $('#foot');
+  foot.hidden = false;
+  $('#prev').hidden = false;
+  $('#next').hidden = true;
+  $('#pager').hidden = true;
+  $('#prev').textContent = '← Keep editing';
+  $('#finish').textContent = 'Confirm & send';
   const rows = [];
   for (const cat of state.spec.categories) {
     const qs = cat.questions.filter(isVisibleQ);
@@ -501,22 +540,22 @@ function renderReview() {
         else if (v === '__other__') text = state.other[q.id] || 'Other';
         else text = String(v) + ((q.type === 'single' || q.type === 'multi') && state.other[q.id] ? ' (+ ' + state.other[q.id] + ')' : '');
       }
+      const note = (state.notes[q.id] || '').trim();
       rows.push('<div class="rv"><div class="rq">' + renderInlineMarkdown(q.label) + '</div>' +
-        '<div class="ra' + (skipped || text === '—' ? ' empty' : '') + '">' + escapeHtml(text) + '</div></div>');
+        '<div class="ra' + (skipped || text === '—' ? ' empty' : '') + '">' + escapeHtml(text) + '</div>' +
+        (note ? '<div class="rv-note">Note: ' + escapeHtml(note) + '</div>' : '') + '</div>');
     }
   }
-  mainEl.innerHTML = '<div class="review"><h2>Ready to send?</h2><p>Check your answers. Nothing is sent to the agent until you confirm.</p>' + rows.join('') + '</div>' +
-    '<div style="display:flex;gap:10px;margin:22px 0 0"><button class="btn ghost" id="edit" type="button">← Keep editing</button><button class="btn primary" id="confirm" type="button">Confirm &amp; send</button></div>';
-  $('#edit').addEventListener('click', editAnswers);
-  $('#confirm').addEventListener('click', submit);
+  mainEl.innerHTML = '<div class="review"><h2>Ready to send?</h2><p>Check your answers. Nothing is sent to the agent until you confirm.</p>' + rows.join('') + '</div>';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function submit() {
-  const btn = $('#confirm') || $('#finish');
+  const btn = $('#finish');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   const payload = {
     answers: buildOutput(),
+    notes: notesForSubmit(),
     skipped: skippedIds(),
     unanswered: unansweredIds(),
     hidden: hiddenIds(),
@@ -547,6 +586,7 @@ function summaryMarkdown(payload) {
       else if (a.type === 'file') lines.push(a.value.map((f) => '- ' + f.name + ' (' + f.path + ')').join('\n'));
       else if (Array.isArray(a.value)) lines.push('- ' + a.value.join('\n- ') + (a.other ? ' (other: ' + a.other + ')' : ''));
       else lines.push(String(a.value) + (a.other ? ' (other: ' + a.other + ')' : ''));
+      if (payload.notes && payload.notes[q.id]) lines.push('_Note: ' + payload.notes[q.id] + '_');
       lines.push('');
     }
   }
@@ -605,7 +645,7 @@ async function save() {
     await fetch(base + '/api/progress', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ answers: state.answers, other: state.other, skipped: Object.keys(state.skipped) }),
+      body: JSON.stringify({ answers: state.answers, other: state.other, notes: state.notes, skipped: skippedKeys() }),
     });
     setSaveState('Saved');
   } catch {
@@ -617,7 +657,7 @@ async function save() {
 }
 
 function localSave() {
-  try { localStorage.setItem(STORE, JSON.stringify({ answers: state.answers, other: state.other, skipped: state.skipped, page: state.page })); } catch { /* ignore */ }
+  try { localStorage.setItem(STORE, JSON.stringify({ answers: state.answers, other: state.other, notes: state.notes, skipped: state.skipped, page: state.page })); } catch { /* ignore */ }
 }
 function localRestore() {
   try {
@@ -626,21 +666,26 @@ function localRestore() {
     const saved = JSON.parse(raw);
     if (saved.answers) Object.assign(state.answers, saved.answers);
     if (saved.other) Object.assign(state.other, saved.other);
+    if (saved.notes) Object.assign(state.notes, saved.notes);
     if (saved.skipped) Object.assign(state.skipped, saved.skipped);
     if (Number.isInteger(saved.page)) state.page = saved.page;
   } catch { /* ignore */ }
 }
 
-function setTheme(mode) {
+function setTheme(mode, persist = true) {
   document.documentElement.dataset.theme = mode;
   $('#theme').textContent = mode === 'dark' ? '☀' : '☾';
-  try { localStorage.setItem(THEME_KEY, mode); } catch { /* ignore */ }
+  if (persist) { try { localStorage.setItem(THEME_KEY, mode); } catch { /* ignore */ } }
 }
-function initTheme() {
+function initTheme(specTheme) {
   let mode;
   try { mode = localStorage.getItem(THEME_KEY); } catch { /* ignore */ }
-  if (mode !== 'light' && mode !== 'dark') mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  setTheme(mode);
+  if (mode !== 'light' && mode !== 'dark') {
+    mode = specTheme === 'light' || specTheme === 'dark'
+      ? specTheme
+      : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  setTheme(mode, false);
 }
 
 async function uploadFile(qid, file) {
@@ -713,6 +758,14 @@ mainEl.addEventListener('input', (e) => {
     scheduleSave();
     return;
   }
+  if (t.dataset && t.dataset.noteField !== undefined) {
+    state.notes[t.dataset.noteField] = t.value;
+    const wrap = t.closest('.note-wrap');
+    const btn = wrap && wrap.querySelector('.note-toggle');
+    if (btn) { const has = t.value.trim().length > 0; btn.classList.toggle('on', has); btn.textContent = has ? 'Note' : 'Add a note'; }
+    scheduleSave();
+    return;
+  }
   if (!t.dataset || !t.dataset.field) return;
   const q = state.byId[t.dataset.field];
   if (!q) return;
@@ -728,6 +781,12 @@ mainEl.addEventListener('click', (e) => {
   if (t.matches && t.matches('input[type=file]')) return;
   const zone = t.closest('[data-drop]');
   if (zone) { const input = qEl(zone.dataset.drop).querySelector('input[type=file]'); if (input) input.click(); return; }
+  const noteBtn = t.closest('[data-note]');
+  if (noteBtn) {
+    const field = qEl(noteBtn.dataset.note).querySelector('[data-note-field]');
+    if (field) { field.hidden = !field.hidden; if (!field.hidden) field.focus(); }
+    return;
+  }
   const rm = t.closest('[data-remove]');
   if (rm) {
     const id = rm.dataset.remove;
@@ -739,8 +798,13 @@ mainEl.addEventListener('click', (e) => {
   const skip = t.closest('[data-skip]');
   if (skip) {
     const id = skip.dataset.skip;
-    state.skipped[id] = !state.skipped[id];
-    if (state.skipped[id]) { state.answers[id] = undefined; state.other[id] = ''; }
+    if (state.skipped[id]) {
+      delete state.skipped[id];
+    } else {
+      state.skipped[id] = true;
+      state.answers[id] = undefined;
+      state.other[id] = '';
+    }
     scheduleSave(true); refreshQuestion(id); return;
   }
   const seg = t.closest('[data-seg]');
@@ -774,9 +838,9 @@ $('#pager').addEventListener('click', (e) => {
   scheduleSave(true); render();
 });
 
-$('#prev').addEventListener('click', prev);
+$('#prev').addEventListener('click', () => { if (state.review) { editAnswers(); return; } prev(); });
 $('#next').addEventListener('click', next);
-$('#finish').addEventListener('click', finish);
+$('#finish').addEventListener('click', () => { if (state.review) { submit(); return; } finish(); });
 $('#theme').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
 function activeChoiceQuestion() {
@@ -814,7 +878,7 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('beforeunload', () => {
   localSave();
   if (!state.submitted && navigator.sendBeacon) {
-    try { navigator.sendBeacon(base + '/api/progress', new Blob([JSON.stringify({ answers: state.answers, other: state.other, skipped: Object.keys(state.skipped) })], { type: 'application/json' })); } catch { /* ignore */ }
+    try { navigator.sendBeacon(base + '/api/progress', new Blob([JSON.stringify({ answers: state.answers, other: state.other, notes: state.notes, skipped: skippedKeys() })], { type: 'application/json' })); } catch { /* ignore */ }
   }
 });
 
@@ -863,6 +927,7 @@ async function boot() {
   state.spec = data.spec;
   state.revision = data.revision;
   state.status = data.status;
+  initTheme(state.spec.settings && state.spec.settings.theme);
   document.title = state.spec.title || 'Brainstormform';
   $('#title').textContent = state.spec.title || '';
   $('#intro').innerHTML = state.spec.intro ? renderMarkdown(state.spec.intro) : '';
@@ -878,6 +943,7 @@ async function boot() {
       const p = await res.json();
       if (p && p.answers) Object.assign(state.answers, p.answers);
       if (p && p.other) Object.assign(state.other, p.other);
+      if (p && p.notes) Object.assign(state.notes, p.notes);
       if (p && Array.isArray(p.skipped)) for (const id of p.skipped) state.skipped[id] = true;
     }
   } catch { /* ignore */ }

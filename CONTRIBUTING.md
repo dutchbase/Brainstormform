@@ -6,7 +6,7 @@ the bar for new code is "does this earn its place?"
 ## Getting started
 
 ```bash
-git clone https://github.com/dutchbase/brainstormform.git
+git clone https://github.com/dutchbase/Brainstormform.git
 cd brainstormform
 npm test                                   # no dependencies to install
 node bin/brainstormform ask examples/roadmap.json

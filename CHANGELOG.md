@@ -8,9 +8,38 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ### Added
 
+- **Notes on every question.** Any question — including one you answered or
+  skipped — accepts a free-text note, returned in a `notes` map keyed by
+  question id. It is the place to add nuance when no option is quite right. The
+  skill, `guide` and docs tell agents to prompt for and read notes.
+- `settings.theme` and `settings.submitLabel` are now honoured by the form: the
+  spec can set the initial theme (your toggle still wins) and the Next button
+  label.
+- The review screen's action bar is now the sticky footer, so **Confirm & send**
+  is always reachable without scrolling.
 - README badges, an animated demo GIF and a social preview card.
 - `PROMOTION.md`: launch checklist and ready-to-post copy for Show HN, X,
   Reddit, Product Hunt, directories and a blog outline.
+
+### Changed
+
+- `wait --timeout 0` / `wait_for_answers({ timeoutSeconds: 0 })` now return
+  immediately instead of blocking.
+- Local `visual` images must live under the directory `ask` runs from.
+- The npm package now ships `docs/`, `CHANGELOG.md` and `CONTRIBUTING.md`.
+- `VERSION` is read from `package.json`; CI runs `node --check` over `src/`.
+
+### Fixed
+
+- CLI flags no longer swallow the next argument: `ask --open questions.json`
+  works. A shared parser replaces the two copies.
+- `scale`/`number` reject a non-positive `step`, which could freeze the form in
+  an infinite loop; `maxFiles` is clamped to at least one.
+- Un-skipping a question no longer re-marks it skipped after a reload.
+- Required-question errors stay visible when `Finish` jumps to another page.
+- Session ids are validated before use, so `stop <path>` cannot delete outside
+  the session root.
+- `SIGINT` now shuts the session server down cleanly.
 
 ## [0.3.0] - 2026-09-21
 

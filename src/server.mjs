@@ -8,11 +8,13 @@ import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 import { readJson, writeJsonAtomic, sessionDir, openBrowser } from './session.mjs';
 import { appendFragment, allQuestions, SpecError } from './schema.mjs';
+import { parseArgs } from './args.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UI_PATH = path.join(__dirname, 'ui.html');
 const RENDER_PATH = path.join(__dirname, 'render.mjs');
 const HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
+const MAX_UPLOADS = 200; // ponytail: per-session cap; raise it if bulk uploads matter
 const MIME = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -22,22 +24,6 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.avif': 'image/avif',
 };
-
-function parseArgs(argv) {
-  const out = { _: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg.startsWith('--')) {
-      const [key, value] = arg.slice(2).split('=');
-      if (value !== undefined) out[key] = value;
-      else if (argv[i + 1] && !argv[i + 1].startsWith('--')) out[key] = argv[++i];
-      else out[key] = true;
-    } else {
-      out._.push(arg);
-    }
-  }
-  return out;
-}
 
 function sanitizeName(name) {
   const base = path.basename(String(name || 'file'));
@@ -79,6 +65,7 @@ function readBody(req, limit) {
 }
 
 function buildAssets(spec, token) {
+  const root = process.cwd();
   const clientSpec = JSON.parse(JSON.stringify(spec));
   const assets = [];
   for (const cat of clientSpec.categories) {
@@ -86,7 +73,10 @@ function buildAssets(spec, token) {
       if (q.type !== 'visual' || !Array.isArray(q.options)) continue;
       for (const option of q.options) {
         if (!option.image || /^https?:\/\//i.test(option.image)) continue;
-        assets.push(path.resolve(process.cwd(), option.image));
+        const resolved = path.resolve(root, option.image);
+        const rel = path.relative(root, resolved);
+        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+        assets.push(resolved);
         option.image = `/s/${token}/api/asset/${assets.length - 1}`;
       }
     }
@@ -114,6 +104,7 @@ export async function startServer({
 
   let revision = 1;
   let status = 'open';
+  let uploads = 0;
   let spec = initialSpec;
   let built = buildAssets(spec, token);
   const sse = new Set();
@@ -219,7 +210,7 @@ export async function startServer({
     }
 
     if (action === 'progress' && req.method === 'GET') {
-      sendJson(res, 200, (await readJson(progressPath, null)) || { answers: {}, other: {}, skipped: [] });
+      sendJson(res, 200, (await readJson(progressPath, null)) || { answers: {}, other: {}, notes: {}, skipped: [] });
       return;
     }
 
@@ -290,6 +281,7 @@ export async function startServer({
       await writeJsonAtomic(progressPath, {
         answers: payload.answers || {},
         other: payload.other || {},
+        notes: payload.notes && typeof payload.notes === 'object' ? payload.notes : {},
         skipped: Array.isArray(payload.skipped) ? payload.skipped : [],
         updatedAt: new Date().toISOString(),
       });
@@ -337,6 +329,10 @@ export async function startServer({
     }
 
     if (action === 'upload' && req.method === 'POST') {
+      if (uploads >= MAX_UPLOADS) {
+        sendJson(res, 413, { error: 'too many uploads for this session' });
+        return;
+      }
       const original = sanitizeName(parsed.searchParams.get('name') || 'file');
       let body;
       try {
@@ -351,6 +347,7 @@ export async function startServer({
       const stored = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}-${original}`;
       const full = path.join(uploadsDir, stored);
       await fsp.writeFile(full, body);
+      uploads += 1;
       sendJson(res, 200, {
         name: original,
         path: full,
@@ -384,6 +381,7 @@ export async function startServer({
         submittedAt: new Date().toISOString(),
         durationMs: payload && payload.durationMs,
         answers: (payload && payload.answers) || {},
+        notes: payload && payload.notes && typeof payload.notes === 'object' ? payload.notes : {},
         skipped: Array.isArray(payload && payload.skipped) ? payload.skipped : [],
         unanswered: Array.isArray(payload && payload.unanswered) ? payload.unanswered : [],
         hidden: Array.isArray(payload && payload.hidden) ? payload.hidden : [],
@@ -496,11 +494,8 @@ async function runDaemon() {
     });
   }
 
-  process.on('SIGTERM', () => {
-    clearTimeout(timer);
-    close().finally(() => process.exit(0));
-  });
-  process.on('SIGINT', () => process.exit(0));
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 
   touch();
   if (args.open) openBrowser(url);
