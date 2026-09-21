@@ -44,11 +44,18 @@ Brainstormform is what you use when the questions are the point.
 Requires Node 18.17 or newer.
 
 ```bash
-# from this checkout
-npm link            # gives you the `brainstormform` command
-# or run it directly
-node bin/brainstormform --help
+curl -fsSL https://raw.githubusercontent.com/dutchbase/Brainstormform/main/install.sh | sh
+brainstormform setup        # wires up Claude Code, Codex and opencode for you
 ```
+
+Or without installing anything:
+
+```bash
+npx -y github:dutchbase/Brainstormform ask questions.json --open
+```
+
+Or from a checkout: `git clone … && cd Brainstormform && npm link`. Full details,
+including each agent's manual config, are in [docs/install.md](docs/install.md).
 
 ## Quickstart
 
@@ -82,22 +89,26 @@ more in [docs/live-sessions.md](docs/live-sessions.md).
 ## Works with your agent
 
 Any agent that can run a shell command can use the CLI. For MCP clients there is
-also a stdio server:
+also a stdio server, and `brainstormform setup` detects and configures the ones
+it finds:
 
 ```bash
-claude mcp add brainstormform -- node /abs/path/to/bin/brainstormform mcp
+brainstormform setup                 # Claude Code, Codex, opencode, Cursor, Gemini CLI
+brainstormform setup --target codex  # just one
 ```
 
-Setup for opencode and Codex is in [docs/mcp.md](docs/mcp.md). The MCP server
-exposes `ask_questions`, `read_answers`, `add_questions` and `wait_for_answers`,
-and pushes a notification when you answer.
+It installs the skill, writes the MCP entry (backing up any config first), and
+runs a health check. Manual snippets for every client live in
+[docs/mcp.md](docs/mcp.md). The MCP server exposes `ask_questions`,
+`read_answers`, `add_questions` and `wait_for_answers`, and pushes a notification
+when you answer.
 
 ### Tell your agent when to use it
 
-Install the bundled skill and the agent will choose correctly between
-Brainstormform and its built-in question tool (small and static goes to the
-built-in tool; more than a few questions, sections, uploads or follow-ups go
-here):
+The skill installed by `setup` teaches the agent to choose between Brainstormform
+and its built-in question tool: small and static goes to the built-in tool, while
+more than a few questions, sections, uploads or live follow-ups come here. To
+install it on its own:
 
 ```bash
 brainstormform install-skill
@@ -111,16 +122,20 @@ brainstormform install-skill
 Questions support Markdown help text, conditional `showIf`, and suggestions.
 The full format is in [docs/schema.md](docs/schema.md).
 
-## Privacy
+## Privacy & trust
 
+- **No telemetry and no network calls.** Nothing leaves the machine.
 - The server binds `127.0.0.1` only, on a random port, behind a random token.
 - Foreign `Host` headers are rejected; upload sizes are capped.
 - Sessions live in `$XDG_RUNTIME_DIR` and are deleted the moment the agent reads
   them, unless you ask to keep, export or archive them.
-- You can always download your answers as JSON or Markdown from the final screen.
+- Run `brainstormform doctor` to see a health check and the exact paths the tool
+  can touch: [what it touches on disk](docs/install.md#what-it-touches-on-disk).
+- Releases publish checksums (`SHA256SUMS`) and are cut from tagged commits.
 
 ## Documentation
 
+- [Install](docs/install.md)
 - [Question format](docs/schema.md)
 - [CLI reference](docs/cli.md)
 - [MCP setup](docs/mcp.md)
@@ -128,9 +143,10 @@ The full format is in [docs/schema.md](docs/schema.md).
 
 ## Roadmap
 
-Conditional logic, visual questions and live sessions just landed. Next up:
-ranking and matrix questions, a compact review screen, an answer archive, and a
-standalone binary so it runs without Node. See [CHANGELOG.md](CHANGELOG.md).
+Live sessions, conditional questions, visual questions, the review screen and
+one-command `setup` have landed. Next up: ranking and matrix questions, a
+searchable archive, and a standalone binary so it runs without Node. See
+[CHANGELOG.md](CHANGELOG.md).
 
 Out of scope: hosted or multi-user use. Local-first is the security model.
 

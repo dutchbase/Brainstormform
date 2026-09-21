@@ -6,6 +6,33 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-21
+
+### Added
+
+- **`brainstormform setup`** — an interactive wizard that detects installed
+  agents (Claude Code, Codex, opencode, Cursor, Gemini CLI), installs the skill,
+  writes the MCP entry with a backup of each config file, and runs `doctor`.
+  `--yes` and `--target` make it scriptable.
+- **`brainstormform doctor`** — checks Node, the CLI on PATH, writable data
+  directories, agent configs, browser opener and a live MCP handshake, and lists
+  every path the tool can touch. `--json` for machines.
+- **`brainstormform update [--check]`** — npm-based self-update.
+- **`--json`** output for the text commands (`help`, `guide`, `version`) and a
+  JSON error shape in JSON mode.
+- **`install.sh`** — a `curl | sh` installer that checks Node and installs the
+  CLI globally.
+- **Release automation** — a `Release` workflow that packs, checksums and
+  publishes a GitHub Release on a tag, and a `Publish` workflow that pushes to
+  npm when an `NPM_TOKEN` secret is present.
+- **`AGENTS.md`** and **`docs/install.md`** (install, per-agent wiring, what
+  touches disk, troubleshooting), plus richer MCP tool descriptions.
+
+### Fixed
+
+- The browser form no longer scrolls to the top when an answer is clicked.
+- Progress saves can no longer be dropped when a save is already in flight.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added

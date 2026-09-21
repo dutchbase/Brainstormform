@@ -226,7 +226,7 @@ export async function handle(msg) {
         {
           name: 'ask_questions',
           description:
-            'Open a live, paginated local web form with any number of questions (choice, visual, text, number/scale, boolean, file). Returns a sessionId and url. Answers are saved continuously; use add_questions to append follow-ups while the user is still answering.',
+            'Open a live, paginated local web form with any number of questions (single/multi choice, image cards, text, number/scale, boolean, file upload), grouped into categories and optionally conditional. Returns a sessionId and url. Answers are saved as the user types; call read_answers to see progress and add_questions to append follow-ups while they are still answering. Prefer this over a built-in question tool when there are more than ~6 questions, when questions need sections, files or follow-ups, or when the user asked for a brainstorm.',
           inputSchema: ASK_SCHEMA,
         },
         {

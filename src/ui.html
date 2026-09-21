@@ -585,7 +585,8 @@ function toast(msg) {
 }
 
 let saveTimer = null;
-let pending = false;
+let saving = false;
+let saveQueued = false;
 function setSaveState(text) { $('#saveState').textContent = text; }
 
 function scheduleSave(immediate) {
@@ -597,8 +598,9 @@ function scheduleSave(immediate) {
 }
 
 async function save() {
-  if (state.submitted || pending) return;
-  pending = true;
+  if (state.submitted) return;
+  if (saving) { saveQueued = true; return; }
+  saving = true;
   try {
     await fetch(base + '/api/progress', {
       method: 'POST',
@@ -609,7 +611,8 @@ async function save() {
   } catch {
     setSaveState('Offline');
   } finally {
-    pending = false;
+    saving = false;
+    if (saveQueued) { saveQueued = false; save(); }
   }
 }
 

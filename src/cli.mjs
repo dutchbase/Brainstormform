@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { normalizeSpec, schemaText, guideText, VERSION, SpecError } from './schema.mjs';
 import {
@@ -23,6 +24,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstormform', 'SKILL.md');
 
+let JSON_MODE = false;
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -44,7 +47,8 @@ function print(value) {
 }
 
 function fail(message, code = 1) {
-  process.stderr.write('brainstormform: ' + message + '\n');
+  if (JSON_MODE) process.stderr.write(JSON.stringify({ error: message, code }) + '\n');
+  else process.stderr.write('brainstormform: ' + message + '\n');
   return code;
 }
 
@@ -290,6 +294,54 @@ async function cmdInstallSkill(args) {
   return 0;
 }
 
+async function cmdSetup(args) {
+  const targets = args.target ? String(args.target).split(',').map((s) => s.trim()) : undefined;
+  const { runSetup } = await import('./setup.mjs');
+  const result = await runSetup({
+    yes: args.yes === true || args.y === true,
+    targets,
+    log: (message) => process.stderr.write('brainstormform: ' + message + '\n'),
+  });
+  print(result);
+  return 0;
+}
+
+async function cmdDoctor(args) {
+  const { runDoctor } = await import('./doctor.mjs');
+  const report = await runDoctor({ version: VERSION });
+  if (args.json || JSON_MODE) {
+    print(report);
+  } else {
+    for (const check of report.checks) {
+      process.stdout.write((check.ok ? 'ok    ' : 'FAIL  ') + check.name.padEnd(16) + check.detail + '\n');
+    }
+    process.stdout.write('\n' + (report.ok ? 'All checks passed.' : 'Some checks need attention.') + '\n');
+  }
+  return report.ok ? 0 : 1;
+}
+
+function cmdUpdate(args) {
+  const pkg = 'brainstormform';
+  const view = spawnSync('npm', ['view', pkg, 'version'], { encoding: 'utf8' });
+  if (view.status !== 0 || !view.stdout.trim()) {
+    return fail('the npm package is not published yet. Update with:\n  npm install -g github:dutchbase/Brainstormform', 1);
+  }
+  const latest = view.stdout.trim();
+  if (latest === VERSION) {
+    print({ version: VERSION, latest, upToDate: true });
+    return 0;
+  }
+  if (args.check) {
+    print({ version: VERSION, latest, upToDate: false });
+    return 0;
+  }
+  process.stderr.write('brainstormform: updating ' + VERSION + ' -> ' + latest + '\n');
+  const install = spawnSync('npm', ['install', '-g', pkg + '@latest'], { stdio: 'inherit' });
+  if (install.status !== 0) return fail('npm install failed', 1);
+  print({ version: latest, updated: true });
+  return 0;
+}
+
 function helpText() {
   return `brainstormform ${VERSION} — live local web forms for agent brainstorming
 
@@ -303,6 +355,9 @@ Usage:
   brainstormform get <id>                      # non-blocking poll
   brainstormform export <id> --to <dir>        # materialise a finished session
   brainstormform archive list
+  brainstormform setup [--target claude,codex,opencode] [--yes]
+  brainstormform doctor [--json]
+  brainstormform update [--check]
   brainstormform install-skill [--target agents|opencode|claude|all]
   brainstormform list | stop <id> | cleanup
   brainstormform schema | guide | mcp | version
@@ -317,6 +372,7 @@ Run "brainstormform guide" for the question format.
 export async function main(argv) {
   const [command, ...rest] = argv;
   const args = parseArgs(rest);
+  JSON_MODE = args.json === true;
 
   switch (command) {
     case 'ask':
@@ -335,6 +391,12 @@ export async function main(argv) {
       return cmdArchive(args);
     case 'install-skill':
       return cmdInstallSkill(args);
+    case 'setup':
+      return cmdSetup(args);
+    case 'doctor':
+      return cmdDoctor(args);
+    case 'update':
+      return cmdUpdate(args);
     case 'list':
       return cmdList();
     case 'stop':
@@ -345,12 +407,14 @@ export async function main(argv) {
       process.stdout.write(schemaText() + '\n');
       return 0;
     case 'guide':
-      process.stdout.write(guideText() + '\n');
+      if (JSON_MODE) print({ guide: guideText() });
+      else process.stdout.write(guideText() + '\n');
       return 0;
     case 'version':
     case '--version':
     case '-v':
-      process.stdout.write(VERSION + '\n');
+      if (JSON_MODE) print({ version: VERSION });
+      else process.stdout.write(VERSION + '\n');
       return 0;
     case 'mcp': {
       const { runMcp } = await import('./mcp.mjs');
@@ -361,7 +425,8 @@ export async function main(argv) {
     case '--help':
     case '-h':
     case undefined:
-      process.stdout.write(helpText());
+      if (JSON_MODE) print({ help: helpText() });
+      else process.stdout.write(helpText());
       return 0;
     default:
       return fail('unknown command "' + command + '". Run "brainstormform help".');
