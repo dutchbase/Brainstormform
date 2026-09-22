@@ -159,7 +159,7 @@ function questionHtml(q) {
   return '<div class="q' + (skipped ? ' skipped' : '') + '" data-qid="' + escapeHtml(q.id) + '" data-type="' + q.type + '" role="group" aria-labelledby="lbl_' + escapeHtml(q.id) + '">' +
     '<div class="qlabel" id="lbl_' + escapeHtml(q.id) + '">' + renderInlineMarkdown(q.label) + (q.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</div>' +
     (q.intro ? '<div class="md">' + renderMarkdown(q.intro) + '</div>' : '') +
-    (q.content ? '<div class="content md">' + renderMarkdown(q.content) + '</div>' : '') +
+    (q.explanation ? '<div class="explanation md">' + renderMarkdown(q.explanation) + '</div>' : '') +
     body +
     noteBlock +
     '<div class="q-foot"><span></span>' + skipBtn + '</div>' +
