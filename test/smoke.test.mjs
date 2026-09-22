@@ -191,6 +191,57 @@ test('local images outside the working directory are not served', async () => {
   }
 });
 
+test('server rewrites local images embedded in explanations and intros', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-mdexp-'));
+  const prev = process.cwd();
+  process.chdir(dir);
+  await fsp.writeFile(path.join(dir, 'mock.png'), Buffer.from([137, 80, 78, 71]));
+  await fsp.writeFile(path.join(dir, 'notes.txt'), 'nope');
+  const spec = normalizeSpec({
+    categories: [
+      {
+        title: 'C',
+        intro: 'See ![cat](mock.png)',
+        questions: [
+          { id: 'q', type: 'text', label: 'Q', explanation: 'Ref ![shot](mock.png) and ![bad](notes.txt) and ![web](https://x/y.png)' },
+        ],
+      },
+    ],
+  });
+  const token = 'mdexp-token';
+  const srv = await startServer({ sessionDir: path.join(dir, 'session'), spec, token });
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${srv.port}/s/${token}/api/questions`)).json();
+    const cat = body.spec.categories[0];
+    assert.match(cat.intro, /!\[cat\]\(\/s\/mdexp-token\/api\/asset\/0\)/);
+    assert.match(cat.questions[0].explanation, /!\[shot\]\(\/s\/mdexp-token\/api\/asset\/1\)/);
+    assert.match(cat.questions[0].explanation, /!\[web\]\(https:\/\/x\/y\.png\)/);
+    assert.match(cat.questions[0].explanation, /!\[bad\]\(notes\.txt\)/, 'non-image extension is left alone');
+    const asset = await fetch(`http://127.0.0.1:${srv.port}/s/${token}/api/asset/0`);
+    assert.equal(asset.status, 200);
+  } finally {
+    process.chdir(prev);
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('server does not rewrite a local explanation image outside the working directory', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-mdout-'));
+  const outside = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-mdsecret-'));
+  await fsp.writeFile(path.join(outside, 'secret.png'), Buffer.from([137, 80, 78, 71]));
+  const spec = normalizeSpec({ questions: [{ id: 'q', type: 'text', label: 'Q', explanation: '![s](' + path.join(outside, 'secret.png') + ')' }] });
+  const srv = await startServer({ sessionDir: path.join(dir, 'session'), spec, token: 'mdout-token' });
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${srv.port}/s/mdout-token/api/questions`)).json();
+    assert.equal(body.spec.categories[0].questions[0].explanation, '![s](' + path.join(outside, 'secret.png') + ')');
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.rm(outside, { recursive: true, force: true });
+  }
+});
+
 test('mcp: initialize, tools/list, resources, ping and errors', async () => {
   const init = await mcpHandle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } });
   assert.equal(init.result.protocolVersion, '2025-03-26');

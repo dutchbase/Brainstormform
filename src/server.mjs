@@ -69,20 +69,42 @@ function readBody(req, limit) {
   });
 }
 
+const IMAGE_EXT = new Set(Object.keys(MIME));
+
 function buildAssets(spec, token) {
   const root = process.cwd();
   const clientSpec = JSON.parse(JSON.stringify(spec));
   const assets = [];
+  const assetUrl = (file) => {
+    assets.push(file);
+    return `/s/${token}/api/asset/${assets.length - 1}`;
+  };
+  const localImage = (src) => {
+    if (/^(https?:|data:image\/|\/)/i.test(src)) return null;
+    const resolved = path.resolve(root, src);
+    const rel = path.relative(root, resolved);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    if (!IMAGE_EXT.has(path.extname(resolved).toLowerCase())) return null;
+    return resolved;
+  };
+  const rewriteImages = (text) => {
+    if (typeof text !== 'string' || !text.includes('![')) return text;
+    return text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (match, alt, src) => {
+      const file = localImage(src);
+      return file ? `![${alt}](${assetUrl(file)})` : match;
+    });
+  };
   for (const cat of clientSpec.categories) {
+    if (cat.intro) cat.intro = rewriteImages(cat.intro);
     for (const q of cat.questions) {
-      if (q.type !== 'visual' || !Array.isArray(q.options)) continue;
-      for (const option of q.options) {
-        if (!option.image || /^https?:\/\//i.test(option.image)) continue;
-        const resolved = path.resolve(root, option.image);
-        const rel = path.relative(root, resolved);
-        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
-        assets.push(resolved);
-        option.image = `/s/${token}/api/asset/${assets.length - 1}`;
+      if (q.intro) q.intro = rewriteImages(q.intro);
+      if (q.explanation) q.explanation = rewriteImages(q.explanation);
+      if (q.type === 'visual' && Array.isArray(q.options)) {
+        for (const option of q.options) {
+          if (!option.image) continue;
+          const file = localImage(option.image);
+          if (file) option.image = assetUrl(file);
+        }
       }
     }
   }
