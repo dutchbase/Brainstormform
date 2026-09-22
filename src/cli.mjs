@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { normalizeSpec, schemaText, guideText, VERSION, SpecError } from './schema.mjs';
+import { formatAnswers } from './render.mjs';
 import { parseArgs } from './args.mjs';
 import {
   createSession,
@@ -31,6 +32,14 @@ function print(value) {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 }
 
+function emit(spec, record, format) {
+  if (format === 'md' || format === 'markdown') {
+    process.stdout.write(formatAnswers(spec, record, 'md') + '\n');
+    return;
+  }
+  print(formatAnswers(spec, record, format));
+}
+
 function fail(message, code = 1) {
   if (JSON_MODE) process.stderr.write(JSON.stringify({ error: message, code }) + '\n');
   else process.stderr.write('brainstormform: ' + message + '\n');
@@ -49,7 +58,7 @@ async function readInput(source) {
   return null;
 }
 
-async function deliver(id, answers, meta) {
+async function deliver(id, answers, meta, format) {
   let output = answers;
   if (meta.out) {
     const dest = resolveOutDir(meta, id);
@@ -71,8 +80,9 @@ async function deliver(id, answers, meta) {
     output = result.answers;
     process.stderr.write('brainstormform: archived at ' + result.dir + '\n');
   }
+  const spec = await readJson(path.join(sessionDir(id), 'questions.json'), null);
   await stopSession(id);
-  print(output);
+  emit(spec || { title: (meta && meta.title) || '', categories: [] }, output, format);
 }
 
 async function cmdAsk(args) {
@@ -120,7 +130,7 @@ async function cmdWait(args) {
   const timeoutMs = Number.isFinite(seconds) ? Math.max(0, seconds) * 1000 : 600000;
   const { answers, meta, error } = await waitForAnswers(id, { timeoutMs });
   if (answers) {
-    await deliver(id, answers, meta);
+    await deliver(id, answers, meta, args.format);
     return 0;
   }
   if (error === 'timeout') return fail('timed out waiting for submission; call wait again to keep waiting.', 3);
@@ -136,7 +146,7 @@ async function cmdGet(args) {
   if (!meta) return fail('unknown session "' + id + '".', 1);
   const answers = await readJson(path.join(dir, 'answers.json'), null);
   if (answers) {
-    await deliver(id, answers, meta);
+    await deliver(id, answers, meta, args.format);
     return 0;
   }
   print({ status: meta.status || 'open', sessionId: id, url: meta.url });
@@ -151,7 +161,7 @@ async function cmdProgress(args) {
   if (!meta) return fail('unknown session "' + id + '".', 1);
   const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
-  print({
+  const record = {
     sessionId: id,
     status: meta.status || (final ? 'submitted' : 'open'),
     revision: meta.revision,
@@ -161,7 +171,13 @@ async function cmdProgress(args) {
     other: progress.other || {},
     notes: (final && final.notes) || progress.notes || {},
     skipped: progress.skipped || [],
-  });
+  };
+  if (args.format === 'json' || args.format === 'md') {
+    const spec = await readJson(path.join(dir, 'questions.json'), null);
+    emit(spec, record, args.format);
+  } else {
+    print(record);
+  }
   return 0;
 }
 
@@ -204,7 +220,12 @@ async function cmdExport(args) {
   if (!answers) return fail('session "' + id + '" has no submitted answers yet.', 4);
   const dest = args.to ? path.resolve(String(args.to)) : path.join(process.cwd(), `.brainstormform/${id}`);
   const result = await exportSession(id, answers, dest, { force: args.force === true });
-  print({ dir: result.dir, answers: result.answers });
+  if (args.format === 'json' || args.format === 'md') {
+    const spec = await readJson(path.join(dir, 'questions.json'), null);
+    emit(spec, { answers: result.answers }, args.format);
+  } else {
+    print({ dir: result.dir, answers: result.answers });
+  }
   return 0;
 }
 

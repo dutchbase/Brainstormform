@@ -18,3 +18,8 @@ test('a trailing value flag becomes boolean, -- ends flag parsing', () => {
   assert.deepEqual(parseArgs(['--out']), { _: [], out: true });
   assert.deepEqual(parseArgs(['--', '--not-a-flag']), { _: ['--not-a-flag'] });
 });
+
+test('parseArgs takes format as a value flag', () => {
+  assert.equal(parseArgs(['--format', 'md']).format, 'md');
+  assert.equal(parseArgs(['--format=json']).format, 'json');
+});

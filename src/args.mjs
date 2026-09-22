@@ -13,6 +13,10 @@ export const VALUE_FLAGS = new Set([
   'idle-timeout',
   'max-upload',
   'session',
+  'format',
+  'since',
+  'from',
+  'preset',
 ]);
 
 export function parseArgs(argv, { valueFlags = VALUE_FLAGS } = {}) {
