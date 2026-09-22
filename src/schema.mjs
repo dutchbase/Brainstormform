@@ -20,9 +20,36 @@ export const QUESTION_TYPES = [
   'scale',
   'boolean',
   'file',
+  'matrix',
+  'rank',
 ];
 const TYPES = new Set(QUESTION_TYPES);
 const CHOICE_TYPES = new Set(['single', 'multi', 'visual']);
+
+function normalizeOptions(input, where) {
+  return input.options.map((opt, i) => {
+    const value = opt && typeof opt === 'object' ? opt.value : opt;
+    const text = opt && typeof opt === 'object' ? opt.label ?? opt.value : opt;
+    if (value == null) throw new SpecError(`${where}.options[${i}] needs a "value".`);
+    const out = { value: String(value), label: String(text) };
+    if (opt && typeof opt === 'object' && opt.description != null) out.description = String(opt.description);
+    if (input.type === 'visual') {
+      const image = opt && typeof opt === 'object' ? opt.image : undefined;
+      if (image == null) throw new SpecError(`${where}.options[${i}].image is required for type "visual".`);
+      out.image = String(image);
+    }
+    return out;
+  });
+}
+
+function normalizeAxis(list, where, name) {
+  return list.map((item, i) => {
+    const value = item && typeof item === 'object' ? item.value : item;
+    const label = item && typeof item === 'object' ? item.label ?? item.value : item;
+    if (value == null) throw new SpecError(`${where}.${name}[${i}] needs a "value".`);
+    return { value: String(value), label: String(label) };
+  });
+}
 
 function slug(value, fallback) {
   const out = String(value || '')
@@ -78,21 +105,27 @@ function normalizeQuestion(input, where, state) {
     if (!Array.isArray(input.options) || input.options.length === 0) {
       throw new SpecError(`${where}.options must be a non-empty array for type "${input.type}".`);
     }
-    q.options = input.options.map((opt, i) => {
-      const value = opt && typeof opt === 'object' ? opt.value : opt;
-      const text = opt && typeof opt === 'object' ? opt.label ?? opt.value : opt;
-      if (value == null) throw new SpecError(`${where}.options[${i}] needs a "value".`);
-      const out = { value: String(value), label: String(text) };
-      if (opt && typeof opt === 'object' && opt.description != null) out.description = String(opt.description);
-      if (input.type === 'visual') {
-        const image = opt && typeof opt === 'object' ? opt.image : undefined;
-        if (image == null) throw new SpecError(`${where}.options[${i}].image is required for type "visual".`);
-        out.image = String(image);
-      }
-      return out;
-    });
+    q.options = normalizeOptions(input, where);
     q.allowOther = (input.type === 'single' || input.type === 'multi') && input.allowOther === true;
     if (input.type === 'visual') q.multiple = input.multiple === true;
+  }
+
+  if (input.type === 'rank') {
+    if (!Array.isArray(input.options) || input.options.length < 2) {
+      throw new SpecError(`${where}.options must have at least two entries for type "rank".`);
+    }
+    q.options = normalizeOptions(input, where);
+  }
+
+  if (input.type === 'matrix') {
+    if (!Array.isArray(input.rows) || input.rows.length === 0) {
+      throw new SpecError(`${where}.rows must be a non-empty array.`);
+    }
+    if (!Array.isArray(input.columns) || input.columns.length === 0) {
+      throw new SpecError(`${where}.columns must be a non-empty array.`);
+    }
+    q.rows = normalizeAxis(input.rows, where, 'rows');
+    q.columns = normalizeAxis(input.columns, where, 'columns');
   }
 
   if (input.type === 'number' || input.type === 'scale') {
@@ -310,6 +343,8 @@ export const SPEC_SCHEMA = {
         },
         allowOther: { type: 'boolean' },
         multiple: { type: 'boolean' },
+        rows: { type: 'array', description: 'matrix only: row axis [{ value, label }]' },
+        columns: { type: 'array', description: 'matrix only: column axis [{ value, label }]' },
         min: { type: 'number' },
         max: { type: 'number' },
         step: { type: 'number' },

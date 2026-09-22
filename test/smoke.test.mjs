@@ -310,3 +310,19 @@ test('progress writes a revision and changed ids', async () => {
     await fsp.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('matrix requires rows and columns and normalizes shorthand', () => {
+  assert.throws(() => normalizeSpec({ questions: [{ type: 'matrix', label: 'm', rows: ['a'] }] }), SpecError);
+  const spec = normalizeSpec({
+    questions: [{ id: 'm', type: 'matrix', label: 'Rate', rows: ['speed', { value: 'cost', label: 'Cost' }], columns: ['Low', 'High'] }],
+  });
+  const q = spec.categories[0].questions[0];
+  assert.deepEqual(q.rows, [{ value: 'speed', label: 'speed' }, { value: 'cost', label: 'Cost' }]);
+  assert.deepEqual(q.columns, [{ value: 'Low', label: 'Low' }, { value: 'High', label: 'High' }]);
+});
+
+test('rank needs at least two options', () => {
+  assert.throws(() => normalizeSpec({ questions: [{ type: 'rank', label: 'r', options: ['only'] }] }), SpecError);
+  const spec = normalizeSpec({ questions: [{ id: 'r', type: 'rank', label: 'Order', options: ['a', 'b', 'c'] }] });
+  assert.deepEqual(spec.categories[0].questions[0].options.map((o) => o.value), ['a', 'b', 'c']);
+});
