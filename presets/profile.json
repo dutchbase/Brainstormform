@@ -1,0 +1,55 @@
+{
+  "title": "A little about you",
+  "intro": "This is stored on your machine and shared with every agent, so questions can be written for you. Every field is optional.",
+  "settings": { "pageSize": 6 },
+  "categories": [
+    {
+      "title": "About you",
+      "questions": [
+        { "id": "name", "type": "text", "label": "What should the agent call you?", "placeholder": "First name or handle" },
+        { "id": "role", "type": "text", "label": "What is your role?", "intro": "e.g. indie hacker, backend engineer, product manager, student" },
+        {
+          "id": "experience",
+          "type": "single",
+          "label": "How much coding experience do you have?",
+          "options": [
+            { "value": "new", "label": "Brand new", "description": "I mostly describe what I want" },
+            { "value": "learning", "label": "Learning", "description": "I can read and tweak code" },
+            { "value": "professional", "label": "Professional", "description": "I build software for a living" },
+            { "value": "senior", "label": "Senior", "description": "I design systems and lead work" },
+            { "value": "expert", "label": "Expert", "description": "Deep specialist" }
+          ]
+        },
+        { "id": "background", "type": "textarea", "label": "What do you already know?", "intro": "Languages, frameworks, tools, domains." },
+        { "id": "language", "type": "text", "label": "Preferred language for questions and answers", "placeholder": "English, Nederlands, …" }
+      ]
+    },
+    {
+      "title": "How to talk to you",
+      "questions": [
+        {
+          "id": "languageLevel",
+          "type": "single",
+          "label": "At what level should questions and answers be phrased?",
+          "options": [
+            { "value": "plain", "label": "Plain and simple", "description": "Short sentences, no jargon, acronyms explained" },
+            { "value": "standard", "label": "Standard", "description": "Everyday technical language" },
+            { "value": "technical", "label": "Technical", "description": "Terse and precise; assume I know the terms" }
+          ]
+        },
+        {
+          "id": "detail",
+          "type": "single",
+          "label": "How much detail do you want?",
+          "options": [
+            { "value": "brief", "label": "Brief" },
+            { "value": "normal", "label": "Normal" },
+            { "value": "detailed", "label": "Detailed" }
+          ]
+        },
+        { "id": "examples", "type": "boolean", "label": "Include concrete examples in questions?" },
+        { "id": "notes", "type": "textarea", "label": "Anything else the agent should know?", "intro": "e.g. explain acronyms, avoid infrastructure jargon." }
+      ]
+    }
+  ]
+}

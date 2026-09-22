@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeProfile, profileSummary, profileFromAnswers, SpecError } from '../src/schema.mjs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { normalizeProfile, profileSummary, profileFromAnswers, normalizeSpec, PROFILE_QUESTION_IDS, SpecError } from '../src/schema.mjs';
 
 test('normalizeProfile trims strings and validates enums', () => {
   const p = normalizeProfile({ name: '  Ada  ', experience: 'learning', languageLevel: 'plain', detail: 'detailed', examples: true });
@@ -42,4 +45,11 @@ test('profileFromAnswers maps rendered answers into a profile', () => {
   assert.equal(p.name, 'Ada');
   assert.equal(p.experience, 'senior');
   assert.equal(p.examples, false);
+});
+
+test('the profile preset covers every profile question id', async () => {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'presets', 'profile.json');
+  const spec = normalizeSpec(JSON.parse(await fsp.readFile(file, 'utf8')));
+  const ids = spec.categories.flatMap((c) => c.questions).map((q) => q.id);
+  for (const id of PROFILE_QUESTION_IDS) assert.ok(ids.includes(id), 'preset is missing ' + id);
 });
