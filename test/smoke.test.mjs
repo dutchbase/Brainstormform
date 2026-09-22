@@ -7,7 +7,7 @@ import fsp from 'node:fs/promises';
 import { normalizeSpec, normalizeFragment, SpecError } from '../src/schema.mjs';
 import { startServer } from '../src/server.mjs';
 import { handle as mcpHandle } from '../src/mcp.mjs';
-import { createSession, waitForAnswers, stopSession, sessionDir } from '../src/session.mjs';
+import { createSession, waitForAnswers, stopSession, sessionDir, exportSession, assertSafeDest } from '../src/session.mjs';
 
 test('normalizeSpec wraps flat questions and applies defaults', () => {
   const spec = normalizeSpec({ title: 'Hi', questions: [{ id: 'a', type: 'text', label: 'A' }] });
@@ -263,4 +263,26 @@ test('the published package includes its docs and changelog', async () => {
   for (const entry of ['docs', 'skills', 'CHANGELOG.md', 'CONTRIBUTING.md']) {
     assert.ok(pkg.files.includes(entry), 'package.json files should include ' + entry);
   }
+});
+
+test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export-'));
+  const dest = path.join(dir, 'cwd');
+  await fsp.mkdir(dest);
+  await fsp.writeFile(path.join(dest, 'precious.txt'), 'keep me');
+  await assert.rejects(() => assertSafeDest(dest, false), /refusing to overwrite/);
+  await assertSafeDest(dest, true);
+  await fsp.rm(dir, { recursive: true, force: true });
+});
+
+test('assertSafeDest allows an empty or session-looking directory', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export2-'));
+  const empty = path.join(dir, 'empty');
+  await fsp.mkdir(empty);
+  await assertSafeDest(empty, false);
+  const sessionish = path.join(dir, 'sess');
+  await fsp.mkdir(sessionish);
+  await fsp.writeFile(path.join(sessionish, 'answers.json'), '{}');
+  await assertSafeDest(sessionish, false);
+  await fsp.rm(dir, { recursive: true, force: true });
 });

@@ -158,7 +158,25 @@ function rewritePaths(value, fromDir, toDir) {
   return value;
 }
 
-export async function exportSession(id, answers, dest) {
+const SESSION_MARKERS = ['answers.json', 'questions.json', 'meta.json'];
+
+export async function assertSafeDest(dest, force = false) {
+  let stat;
+  try {
+    stat = await fsp.stat(dest);
+  } catch {
+    return;
+  }
+  if (!stat.isDirectory()) throw new Error('output path exists and is not a directory: ' + dest);
+  const entries = await fsp.readdir(dest);
+  if (entries.length === 0) return;
+  if (entries.some((name) => SESSION_MARKERS.includes(name))) return;
+  if (force) return;
+  throw new Error('refusing to overwrite non-empty directory ' + dest + ' (pass --force to overwrite)');
+}
+
+export async function exportSession(id, answers, dest, { force = false } = {}) {
+  await assertSafeDest(dest, force);
   const dir = sessionDir(id);
   await fsp.rm(dest, { recursive: true, force: true });
   await fsp.mkdir(dest, { recursive: true });

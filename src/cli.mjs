@@ -53,7 +53,7 @@ async function deliver(id, answers, meta) {
   let output = answers;
   if (meta.out) {
     const dest = resolveOutDir(meta, id);
-    const result = await exportSession(id, answers, dest);
+    const result = await exportSession(id, answers, dest, { force: meta.force === true });
     output = result.answers;
     process.stderr.write('brainstormform: wrote output to ' + result.dir + '\n');
     if (meta.commit) {
@@ -93,6 +93,7 @@ async function cmdAsk(args) {
     out: args.out === undefined ? false : args.out === true ? true : String(args.out),
     commit: args.commit === true,
     archive: args.archive === true,
+    force: args.force === true,
     onSubmit: args['on-submit'] ? String(args['on-submit']) : undefined,
   };
   const open = args['no-open'] !== true;
@@ -202,7 +203,7 @@ async function cmdExport(args) {
   const answers = await readJson(path.join(dir, 'answers.json'), null);
   if (!answers) return fail('session "' + id + '" has no submitted answers yet.', 4);
   const dest = args.to ? path.resolve(String(args.to)) : path.join(process.cwd(), `.brainstormform/${id}`);
-  const result = await exportSession(id, answers, dest);
+  const result = await exportSession(id, answers, dest, { force: args.force === true });
   print({ dir: result.dir, answers: result.answers });
   return 0;
 }
@@ -334,7 +335,7 @@ function helpText() {
 
 Usage:
   brainstormform ask [questions.json|-] [--open|--no-open] [--keep]
-                     [--out [dir]] [--commit] [--archive]
+                     [--out [dir]] [--commit] [--archive] [--force]
                      [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
   brainstormform progress <id>                 # current draft answers + status
   brainstormform add <id> <fragment.json|->    # append questions to a live form
