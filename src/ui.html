@@ -96,6 +96,13 @@
   .seg:active{transform:scale(.95)}
   .seg.sel{background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:var(--accent-ink); border-color:transparent}
   .scale-labels{display:flex; justify-content:space-between; color:var(--muted); font-size:12.5px; margin-top:8px; max-width:440px}
+  .mx{overflow-x:auto;margin-top:14px}
+  .mx table{border-collapse:collapse;width:100%;font-size:14px}
+  .mx th{font-weight:540;text-align:center;padding:6px 8px;color:var(--muted)}
+  .mx tbody th{text-align:left;font-weight:520;color:var(--text);white-space:nowrap}
+  .mx td{border-top:1px solid var(--border);text-align:center;padding:6px 8px}
+  .mx-cell{display:inline-flex;padding:6px}
+  .mx input{accent-color:var(--accent);width:18px;height:18px}
   .drop{margin-top:12px; border:1.5px dashed var(--border-strong); border-radius:var(--radius-sm); padding:20px; text-align:center; color:var(--muted); cursor:pointer; background:var(--panel-2); transition:border-color .15s, background .15s, transform .1s}
   .drop:hover,.drop.over{border-color:var(--accent); background:var(--accent-soft); color:var(--text)}
   .files{display:grid; gap:8px; margin-top:10px}
@@ -315,6 +322,15 @@ function questionHtml(q) {
     body = '<div class="segs">' +
       '<button type="button" class="seg' + (val === true ? ' sel' : '') + '" data-seg="' + escapeHtml(q.id) + '" data-value="true">Yes</button>' +
       '<button type="button" class="seg' + (val === false ? ' sel' : '') + '" data-seg="' + escapeHtml(q.id) + '" data-value="false">No</button></div>';
+  } else if (q.type === 'matrix') {
+    const chosen = state.answers[q.id] && typeof state.answers[q.id] === 'object' ? state.answers[q.id] : {};
+    body = '<div class="mx"><table><thead><tr><th></th>' +
+      q.columns.map((c) => '<th>' + escapeHtml(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
+      q.rows.map((r) => '<tr><th scope="row">' + escapeHtml(r.label) + '</th>' +
+        q.columns.map((c) => '<td><label class="mx-cell"><input type="radio" name="qf_' + escapeHtml(q.id) + '_' + escapeHtml(r.value) +
+          '" data-matrix="' + escapeHtml(q.id) + '" data-row="' + escapeHtml(r.value) + '" value="' + escapeHtml(c.value) + '"' +
+          (chosen[r.value] === c.value ? ' checked' : '') + '></label></td>').join('') + '</tr>').join('') +
+      '</tbody></table></div>';
   } else if (q.type === 'file') {
     const files = Array.isArray(val) ? val : [];
     const chips = files.map((f, i) => {
@@ -415,6 +431,10 @@ function validateQuestion(q) {
       if (usesOther && !(state.other[q.id] || '').trim()) return 'Please specify your "Other" answer.';
     }
   }
+  if (q.type === 'matrix' && q.required) {
+    const val = state.answers[q.id] || {};
+    if (q.rows.some((r) => !val[r.value])) return 'Answer every row.';
+  }
   return null;
 }
 
@@ -473,6 +493,7 @@ function buildOutput() {
     else if (q.type === 'scale') out[q.id] = { type: 'scale', value: Number(v) };
     else if (q.type === 'boolean') out[q.id] = { type: 'boolean', value: !!v };
     else if (q.type === 'file') out[q.id] = { type: 'file', value: v };
+    else if (q.type === 'matrix') { if (v && typeof v === 'object' && Object.keys(v).length) out[q.id] = { type: 'matrix', value: v }; }
     else out[q.id] = { type: q.type, value: v };
   }
   return out;
@@ -536,6 +557,8 @@ function renderReview() {
       else if (!isEmpty(v)) {
         if (q.type === 'file') text = v.map((f) => f.name).join(', ');
         else if (q.type === 'boolean') text = v ? 'Yes' : 'No';
+        else if (q.type === 'matrix') text = Object.entries(v).map(([r, c]) => r + ': ' + c).join(', ');
+        else if (q.type === 'rank') text = v.join(' › ');
         else if (Array.isArray(v)) text = v.filter((x) => x !== '__other__').join(', ') + (state.other[q.id] ? ' (+ ' + state.other[q.id] + ')' : '');
         else if (v === '__other__') text = state.other[q.id] || 'Other';
         else text = String(v) + ((q.type === 'single' || q.type === 'multi') && state.other[q.id] ? ' (+ ' + state.other[q.id] + ')' : '');
@@ -585,6 +608,7 @@ function summaryMarkdown(payload) {
       if (!a) lines.push('_skipped_');
       else if (a.type === 'file') lines.push(a.value.map((f) => '- ' + f.name + ' (' + f.path + ')').join('\n'));
       else if (Array.isArray(a.value)) lines.push('- ' + a.value.join('\n- ') + (a.other ? ' (other: ' + a.other + ')' : ''));
+      else if (a.value && typeof a.value === 'object') lines.push(Object.entries(a.value).map(([k, v]) => '- ' + k + ': ' + v).join('\n'));
       else lines.push(String(a.value) + (a.other ? ' (other: ' + a.other + ')' : ''));
       if (payload.notes && payload.notes[q.id]) lines.push('_Note: ' + payload.notes[q.id] + '_');
       lines.push('');
@@ -746,6 +770,16 @@ mainEl.addEventListener('change', (e) => {
   const host = t.closest('[data-qid]');
   if (!host) return;
   const before = visibleKey();
+  if (t.dataset && t.dataset.matrix !== undefined) {
+    const id = t.dataset.matrix;
+    const current = state.answers[id] && typeof state.answers[id] === 'object' ? { ...state.answers[id] } : {};
+    current[t.dataset.row] = t.value;
+    state.answers[id] = current;
+    delete state.skipped[id];
+    showError(id, null);
+    scheduleSave(true);
+    return;
+  }
   applyAnswerFromChange(host, t);
   onChoiceChange(before);
 });
