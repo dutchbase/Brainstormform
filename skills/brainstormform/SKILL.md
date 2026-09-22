@@ -33,7 +33,7 @@ tool's limit, use Brainstormform instead.
 ## Check it is available
 
 ```bash
-brainstormform version        # or: node /path/to/brainstormform/bin/brainstormform version
+brainstormform version
 ```
 
 If it is missing, fall back to the built-in question tool and say so.
@@ -46,8 +46,9 @@ brainstormform ask questions.json --open
 brainstormform wait bf-... --timeout 600      # answers JSON on stdout when finished
 ```
 
-`wait` exits 3 on timeout — just call it again. The session is deleted once read
-unless you pass `--keep`, `--out` or `--archive`.
+`wait` exits 3 on timeout — just call it again. Add `--format json` for a
+compact id→value map or `--format md` for Markdown. The session is deleted once
+read unless you pass `--keep`, `--out` or `--archive`.
 
 ## Live form (read answers, add follow-ups)
 
@@ -56,38 +57,33 @@ This is the reason to use Brainstormform for a real brainstorm:
 ```bash
 brainstormform ask questions.json --open      # start
 brainstormform progress bf-...                # what the user has answered so far
+brainstormform progress bf-... --since 4      # only what changed since progressRevision 4
 brainstormform add bf-... followups.json      # append questions based on their answers
 brainstormform wait bf-... --timeout 600      # block until they press Finish
 ```
 
 Typical loop: start with a broad category, read `progress`, then `add` targeted
 follow-ups while the user is still answering. You can repeat this several times.
-Once the user presses Finish the session closes; if you still need input, start a
-new session.
+`ask --from <prevId>` seeds a new form with a past session's answers. Once the
+user presses Finish the session closes; if you still need input, start a new
+session.
 
 ## MCP tools (preferred when available)
 
 - `ask_questions({ title, categories | questions, open })` → `{ sessionId, url }`
-- `read_answers({ sessionId })` → answers so far + status
+- `read_answers({ sessionId, format?, since? })` → answers so far + status
 - `add_questions({ sessionId, questions | categories })` → append follow-ups
-- `wait_for_answers({ sessionId, timeoutSeconds })` → final answers after Finish
+- `wait_for_answers({ sessionId, timeoutSeconds, format? })` → final answers
 
 Prefer MCP over the CLI so you also receive resource-updated notifications when
-the user answers. Polling with `read_answers` still works if you do not.
+the user answers. Read the `brainstormform://guide` resource for the full format.
 
 ## Question format
 
-Run `brainstormform guide` for the full format. Quick summary:
-
-- Categories hold questions: `{ title, intro?, questions: [...] }`.
-- Types: `single`, `multi`, `visual` (image options), `text`, `textarea`,
-  `number`, `scale`, `boolean`, `file`.
-- Per question: `label`, `required?`, `intro?` (Markdown help), `content?`
-  (Markdown block), `placeholder?`, and `showIf` for conditional questions.
-- `showIf: { question: "earlier_id", equals | not | in | contains | answered }`
-  only shows a question when an earlier answer matches.
-- Markdown in labels and intros supports bold, code and `[links](https://…)`
-  which open in a new tab.
+Run `brainstormform guide` for the full format. Summary: `categories` hold
+`questions`; types are `single`, `multi`, `visual`, `text`, `textarea`, `number`,
+`scale`, `boolean`, `file`, `matrix`, `rank`; `showIf` shows a question
+conditionally; every question accepts a free-text `note`.
 
 ## Quality rules
 
