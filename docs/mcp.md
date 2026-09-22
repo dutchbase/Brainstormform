@@ -7,10 +7,11 @@ notifications. Any MCP-capable agent can use it.
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
-| `ask_questions` | the form spec, `open`, `waitSeconds`, `keep` | `{ sessionId, url }` |
+| `ask_questions` | the form spec, `open`, `waitSeconds`, `keep`, `preset`, `saveAsProfile` | `{ sessionId, url, profile }` |
 | `read_answers` | `sessionId`, `format?`, `since?` | answers so far + `{ status, revision, answered, notes }` |
 | `add_questions` | `sessionId`, `questions` or `categories` | `{ revision, questionCount }` |
 | `wait_for_answers` | `sessionId`, `timeoutSeconds`, `format?` | final answers after Finish |
+| `get_profile` | — | `{ configured, profile, path, summary }` |
 
 `ask_questions` returns as soon as the form is live unless you pass
 `waitSeconds`, which blocks up to that long for the user to finish.
@@ -43,7 +44,10 @@ Clients that do not surface notifications can poll `read_answers` instead — it
 always works.
 
 A static `brainstormform://guide` resource returns the full question format, so
-the tool descriptions can stay short.
+the tool descriptions can stay short. `brainstormform://profile` returns the
+[user profile](profile.md), and the `get_profile` tool returns it with a short
+summary. When no profile exists, onboard with
+`ask_questions({ preset: "profile", saveAsProfile: true })`.
 
 ## Client config
 

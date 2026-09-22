@@ -10,8 +10,13 @@ Start a form and print its URL. Returns immediately.
 
 ```bash
 brainstormform ask questions.json --open
-# {"sessionId":"bf-...","url":"http://127.0.0.1:PORT/s/TOKEN","pid":1234}
+# {"sessionId":"bf-...","url":"http://127.0.0.1:PORT/s/TOKEN","pid":1234,
+#  "profile":{...},"profileHint":"Tailor your questions to this profile. ..."}
 ```
+
+The `profile` field is a short summary of the [user profile](profile.md), and
+`profileHint` tells the agent to read the full profile (or to onboard the user
+first).
 
 Reads from a file, or from stdin when passed `-` or nothing.
 
@@ -25,6 +30,7 @@ Reads from a file, or from stdin when passed `-` or nothing.
 | `--force` | Allow `--out`/`export` to overwrite a non-empty directory |
 | `--from <id>` | Seed the new form's defaults with a past session's answers |
 | `--preset <name>` | Load a bundled question bank instead of a file (try `discovery`) |
+| `--save-profile` | On submit, store the answers as the global user profile (use with `--preset profile`) |
 | `--on-submit "cmd"` | Run a shell command when the user presses Finish |
 | `--idle-timeout s` | Shut the server down after this long with no activity (default 3600) |
 | `--max-upload MB` | Per-file upload limit (default 25) |
@@ -102,9 +108,21 @@ brainstormform install-skill --dir ./skills        # anywhere
 | `resume <id>` | Restart the server for a session whose process exited |
 | `cleanup` | Remove dead, unsubmitted sessions |
 
+## profile
+
+Read and write the machine-wide [user profile](profile.md) that agents use to
+tailor questions.
+
+```bash
+brainstormform profile                      # profile + summary
+brainstormform profile path                 # where it is stored
+printf '{"experience":"senior"}' | brainstormform profile set -
+brainstormform profile clear
+```
+
 ## Other
 
-`mcp` (run as an MCP server), `schema`, `guide`, `version`, `help`.
+`mcp` (run as an MCP server), `schema`, `guide`, `profile`, `version`, `help`.
 
 ## Exit codes
 

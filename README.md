@@ -45,6 +45,9 @@ Brainstormform is what you use when the questions are the point.
   questions to the same form while you are still filling it in.
 - **Answers as JSON.** Typed and clean, straight into the agent's context. Or ask
   for a compact map or Markdown with `--format json|md` to save tokens.
+- **Personalized questions.** A profile you set once from the ⚙ menu — experience
+  level, language, how much detail — is stored locally and shared with every
+  agent, so a senior developer and a new vibecoder get questions written for them.
 - **Local by default.** Binds to `127.0.0.1`, random port and token, deleted once
   read. Nothing leaves the machine.
 

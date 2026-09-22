@@ -118,6 +118,8 @@ touch.
 - `$XDG_RUNTIME_DIR/brainstormform/` — temporary session data, deleted as soon as
   the agent reads it.
 - `$XDG_STATE_HOME/brainstormform/` — optional archive, only with `--archive`.
+- `$XDG_CONFIG_HOME/brainstormform/profile.json` — your [user profile](profile.md),
+  written only when you save one from the settings menu or the onboarding form.
 - Agent config files and skill folders — only when you run `setup`.
 - `.brainstormform/` in the current directory — only with `ask --out`.
 

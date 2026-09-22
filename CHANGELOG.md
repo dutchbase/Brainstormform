@@ -6,6 +6,28 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-22
+
+### Added
+
+- **User profile.** A machine-wide profile at
+  `~/.config/brainstormform/profile.json` holds the user's identity, experience
+  level and wording preferences so agents can tailor their questions. It carries
+  `name`, `role`, `experience` (`new`/`learning`/`professional`/`senior`/`expert`),
+  `background`, `language`, `languageLevel` (`plain`/`standard`/`technical`),
+  `detail`, `examples` and `notes`.
+- **Settings menu in every form.** A ⚙ button opens a panel to view, edit and
+  clear the profile; changes persist across sessions and agents.
+- **`brainstormform profile`** (`get`/`set`/`path`/`clear`) and the MCP
+  `get_profile` tool, plus a `brainstormform://profile` resource.
+- **Profile-aware `ask`.** `ask`/`ask_questions` return a short `profile` summary
+  and a hint to read the full profile (or onboard the user). Onboarding is
+  `ask --preset profile --save-profile` (MCP
+  `ask_questions({ preset: "profile", saveAsProfile: true })`), which writes the
+  submitted answers straight to the profile.
+- The Brainstormform skill now tells agents to read the profile once and tailor
+  wording by experience, language level, detail and examples.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added

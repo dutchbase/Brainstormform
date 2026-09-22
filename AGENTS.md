@@ -32,6 +32,18 @@ installed can use it directly. For agents that do not, a copy is bundled at
 and `brainstormform install-skill` installs it alongside the Brainstormform
 skill, skipping it when a copy is already present.
 
+## User profile
+
+A machine-wide profile at `~/.config/brainstormform/profile.json` (see
+`docs/profile.md`) holds the user's identity, experience level and wording
+preferences. Read it with `brainstormform profile` / the `get_profile` MCP tool
+before writing questions, and tailor by `experience`, `languageLevel`, `detail`,
+`examples` and `language`. `ask`/`ask_questions` return a short summary; follow-up
+forms in the same session can reuse it. When no profile exists, ask for one first
+with `ask --preset profile --save-profile` (MCP:
+`ask_questions({ preset: "profile", saveAsProfile: true })`). The user can also
+edit it from the ⚙ settings menu in any form.
+
 ## Using it
 
 ```bash
@@ -70,6 +82,7 @@ Run `brainstormform guide` for the full question format.
 | `src/ui.html` | Front end |
 | `skills/brainstormform/SKILL.md` | The agent skill |
 | `skills/brainstorming/` | Vendored superpowers brainstorming skill (MIT) |
+| `presets/` | Bundled question banks (`profile`, `discovery`) |
 | `docs/` | Schema, CLI, MCP, live sessions, install |
 
 ## Commits
