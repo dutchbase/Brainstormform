@@ -200,12 +200,19 @@ test('mcp: initialize, tools/list, resources, ping and errors', async () => {
   const list = await mcpHandle({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
   assert.deepEqual(
     list.result.tools.map((t) => t.name),
-    ['ask_questions', 'read_answers', 'add_questions', 'wait_for_answers'],
+    ['ask_questions', 'read_answers', 'add_questions', 'wait_for_answers', 'get_profile'],
   );
 
-  assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 3, method: 'resources/list' })).result.resources.map((r) => r.uri), ['brainstormform://guide']);
+  assert.deepEqual(
+    (await mcpHandle({ jsonrpc: '2.0', id: 3, method: 'resources/list' })).result.resources.map((r) => r.uri),
+    ['brainstormform://guide', 'brainstormform://profile'],
+  );
   const guide = await mcpHandle({ jsonrpc: '2.0', id: 6, method: 'resources/read', params: { uri: 'brainstormform://guide' } });
   assert.match(guide.result.contents[0].text, /question format/i);
+  const profRes = await mcpHandle({ jsonrpc: '2.0', id: 7, method: 'resources/read', params: { uri: 'brainstormform://profile' } });
+  assert.equal(typeof profRes.result.contents[0].text, 'string');
+  const profTool = await mcpHandle({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'get_profile', arguments: {} } });
+  assert.match(profTool.result.content[0].text, /configured/);
   assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 4, method: 'ping' })).result, {});
   assert.equal((await mcpHandle({ jsonrpc: '2.0', id: 5, method: 'nope' })).error.code, -32601);
   assert.equal(await mcpHandle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);

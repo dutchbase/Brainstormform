@@ -1,7 +1,9 @@
 import readline from 'node:readline';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { normalizeSpec, VERSION, SpecError, guideText } from './schema.mjs';
+import { fileURLToPath } from 'node:url';
+import { normalizeSpec, VERSION, SpecError, guideText, profileSummary } from './schema.mjs';
 import { formatAnswers } from './render.mjs';
 import {
   createSession,
@@ -11,7 +13,11 @@ import {
   keepSession,
   sessionDir,
   readJson,
+  readProfile,
+  profilePath,
 } from './session.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const DEFAULT_PROTOCOL = PROTOCOL_VERSIONS[0];
@@ -36,6 +42,7 @@ function textResult(payload, isError = false) {
 }
 
 const GUIDE_URI = 'brainstormform://guide';
+const PROFILE_URI = 'brainstormform://profile';
 
 const resourceUri = (sessionId) => `brainstormform://session/${sessionId}`;
 
@@ -111,6 +118,8 @@ const ASK_SCHEMA = {
     open: { type: 'boolean', description: 'Open the form in the default browser (default true)' },
     waitSeconds: { type: 'number', description: 'Block up to this many seconds for the user to finish; 0 returns immediately (default 0)' },
     keep: { type: 'boolean', description: 'Copy the session (with uploads) to ./brainstormform-<id>/ instead of deleting it' },
+    preset: { type: 'string', description: 'Use a bundled question bank, e.g. "profile" or "discovery"' },
+    saveAsProfile: { type: 'boolean', description: 'On submit, store the answers as the global user profile (use with preset "profile")' },
   },
 };
 
@@ -146,24 +155,37 @@ const WAIT_SCHEMA = {
 };
 
 async function callAsk(args) {
-  const { open = true, waitSeconds = 0, keep = false, ...spec } = args || {};
+  const { open = true, waitSeconds = 0, keep = false, saveAsProfile = false, preset, ...spec } = args || {};
+  let input = spec;
+  if (preset) {
+    try {
+      input = JSON.parse(await fsp.readFile(path.resolve(__dirname, '..', 'presets', String(preset) + '.json'), 'utf8'));
+    } catch {
+      return textResult('Unknown preset "' + preset + '".', true);
+    }
+  }
   let normalized;
   try {
-    normalized = normalizeSpec(spec);
+    normalized = normalizeSpec(input);
   } catch (err) {
     if (err instanceof SpecError) return textResult('Invalid spec: ' + err.message, true);
     throw err;
   }
-  const { id } = await createSession(normalized, { keep });
+  const { id } = await createSession(normalized, { keep, saveProfile: saveAsProfile });
   const meta = await startDetachedServer(id, { open, idleTimeout: 3600 });
   startWatch(id);
-  const info = { sessionId: id, url: meta.url, status: 'open' };
+  const info = { sessionId: id, url: meta.url, status: 'open', profile: profileSummary(await readProfile()) };
 
   if (waitSeconds > 0) {
     const { answers, meta: latest } = await waitForAnswers(id, { timeoutMs: waitSeconds * 1000 });
     if (answers) return textResult(await finish(id, answers, { ...latest, keep }));
   }
   return textResult(info);
+}
+
+async function callGetProfile() {
+  const profile = await readProfile();
+  return textResult({ configured: !!profile, profile, path: profilePath(), summary: profileSummary(profile) });
 }
 
 async function callRead(args) {
@@ -271,6 +293,11 @@ export async function handle(msg) {
           description: 'Block until the user presses Finish, then return the final answers and close the session. Accepts format:"json"|"md".',
           inputSchema: WAIT_SCHEMA,
         },
+        {
+          name: 'get_profile',
+          description: 'Read the global user profile (identity, experience level and wording preferences) so questions can be tailored. Returns { configured:false } when the user has no profile yet; then ask with preset:"profile", saveAsProfile:true. For follow-up forms in the same session you already have it — do not fetch again.',
+          inputSchema: { type: 'object', properties: {} },
+        },
       ],
     });
   }
@@ -278,6 +305,7 @@ export async function handle(msg) {
     return ok(id, {
       resources: [
         { uri: GUIDE_URI, name: 'Brainstormform question format', mimeType: 'text/markdown' },
+        { uri: PROFILE_URI, name: 'User profile', mimeType: 'application/json' },
         ...[...watchers.keys()].map((sessionId) => ({
           uri: resourceUri(sessionId),
           name: 'Brainstormform session ' + sessionId,
@@ -290,6 +318,9 @@ export async function handle(msg) {
     const uri = params && params.uri;
     if (uri === GUIDE_URI) {
       return ok(id, { contents: [{ uri, mimeType: 'text/markdown', text: guideText() }] });
+    }
+    if (uri === PROFILE_URI) {
+      return ok(id, { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(await readProfile()) }] });
     }
     const sessionId = String(uri || '').replace('brainstormform://session/', '');
     const read = await callRead({ sessionId });
@@ -305,6 +336,7 @@ export async function handle(msg) {
       if (name === 'read_answers') return ok(id, await callRead(args));
       if (name === 'add_questions') return ok(id, await callAdd(args));
       if (name === 'wait_for_answers' || name === 'get_answers') return ok(id, await callWait(args));
+      if (name === 'get_profile') return ok(id, await callGetProfile());
       return ok(id, textResult('Unknown tool "' + name + '"', true));
     } catch (err) {
       return ok(id, textResult('Error: ' + (err && err.message ? err.message : String(err)), true));
