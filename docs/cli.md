@@ -43,13 +43,13 @@ Print what the user has answered so far, without ending the session.
 brainstormform progress bf-...
 # { sessionId, status, revision, progressRevision, changed, answered, answers, other, notes, skipped, url }
 
-brainstormform progress bf-... --since 4   # only what changed since progressRevision 4
+brainstormform progress bf-... --since 4   # also lists which ids changed since progressRevision 4
 ```
 
+`answers` is always the full current set — a read never hides earlier answers.
 The server increments `progressRevision` on every save and records which question
-ids changed. `--since` returns just those (empty when already up to date); if the
-gap is larger than one revision it returns the full answers so nothing is lost.
-`--format json|md` works here too.
+ids changed; `--since` narrows the `changed` list to the ids updated after that
+revision (empty when already up to date). `--format json|md` works here too.
 
 ## add
 

@@ -20,8 +20,9 @@ immediately and poll instead of blocking.
 
 To keep responses small, pass `format: "json"` for a compact
 `{ answers: { id: value }, notes? }` map, or `format: "md"` for a Markdown
-summary. `read_answers` also takes `since: <progressRevision>` to return only
-what changed since a previous read. Results are sent as compact JSON text.
+summary. `read_answers` also takes `since: <progressRevision>`; `answers` is
+always the full current set, and `changed` lists the ids updated after that
+revision. Results are sent as compact JSON text.
 
 Typical flow:
 

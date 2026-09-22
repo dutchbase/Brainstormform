@@ -193,3 +193,25 @@ export function formatAnswers(spec, record, format = 'full') {
   if (format === 'json' || format === 'compact') return compactAnswers(record);
   return record;
 }
+
+// `answers` is always the full current set: `since` must never make a read look
+// like earlier answers disappeared. It only narrows the `changed` id list.
+export function progressRecord({ sessionId, status, revision, url, progress, final, since }) {
+  const p = progress || {};
+  const progressRevision = p.revision || 0;
+  const changed = Array.isArray(p.changed) ? p.changed : [];
+  const upToDate = Number.isFinite(since) && since >= progressRevision;
+  return {
+    sessionId,
+    status,
+    revision,
+    progressRevision,
+    changed: upToDate ? [] : changed,
+    url,
+    answered: Object.keys(p.answers || {}).length,
+    answers: (final && final.answers) || p.answers || {},
+    other: p.other || {},
+    notes: (final && final.notes) || p.notes || {},
+    skipped: p.skipped || [],
+  };
+}

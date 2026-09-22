@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml, allQuestions, compactAnswers, summaryMarkdown, formatAnswers } from '../src/render.mjs';
+import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml, allQuestions, compactAnswers, summaryMarkdown, formatAnswers, progressRecord } from '../src/render.mjs';
 
 test('escapeHtml neutralises tags', () => {
   assert.equal(escapeHtml('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
@@ -112,4 +112,21 @@ test('formatAnswers selects the shape', () => {
   assert.equal(formatAnswers(SPEC, rec, 'full'), rec);
   assert.deepEqual(formatAnswers(SPEC, rec, 'json'), { answers: { a: 1 } });
   assert.match(formatAnswers(SPEC, rec, 'md'), /# T/);
+});
+
+test('progressRecord always returns the full answers, since only narrows changed', () => {
+  const progress = { revision: 3, changed: ['b'], answers: { a: 'one', b: 'two' }, other: {}, notes: {}, skipped: [] };
+  const base = { sessionId: 'bf-x', status: 'open', revision: 1, url: 'http://x', progress, final: null };
+
+  const upToDate = progressRecord({ ...base, since: 3 });
+  assert.deepEqual(upToDate.answers, { a: 'one', b: 'two' });
+  assert.deepEqual(upToDate.changed, []);
+
+  const behind = progressRecord({ ...base, since: 2 });
+  assert.deepEqual(behind.answers, { a: 'one', b: 'two' });
+  assert.deepEqual(behind.changed, ['b']);
+
+  const full = progressRecord({ ...base, since: null });
+  assert.deepEqual(full.answers, { a: 'one', b: 'two' });
+  assert.deepEqual(full.changed, ['b']);
 });

@@ -96,7 +96,7 @@ This is the reason to use Brainstormform for a real brainstorm:
 ```bash
 brainstormform ask questions.json --open      # start
 brainstormform progress bf-...                # what the user has answered so far
-brainstormform progress bf-... --since 4      # only what changed since progressRevision 4
+brainstormform progress bf-... --since 4      # also list ids changed since progressRevision 4
 brainstormform add bf-... followups.json      # append questions based on their answers
 brainstormform wait bf-... --timeout 600      # block until they press Finish
 ```

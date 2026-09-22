@@ -6,6 +6,16 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+### Fixed
+
+- **`read_answers` / `progress --since` no longer hides earlier answers.** A read
+  could return a partial or empty `answers` map when the agent passed `since`,
+  which looked like the first answers had been lost. `answers`/`other`/`notes`
+  are now always the full current set; `since` only narrows the `changed` id list.
+- **Progress revisions survive a resume.** `progressRevision` is seeded from the
+  existing `progress.json` instead of restarting at 0, so a `since` value from
+  before a session was resumed is no longer treated as already up to date.
+
 ## [0.6.0] - 2026-09-22
 
 ### Added

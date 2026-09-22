@@ -461,7 +461,7 @@ Ask a user unlimited questions through a local web form, live.
 
   brainstormform ask questions.json --open        # start a form, prints {sessionId,url}
   brainstormform progress <id>                    # current draft answers + status
-  brainstormform progress <id> --since 4          # only answers changed since progressRevision 4
+  brainstormform progress <id> --since 4          # answers + which ids changed since progressRevision 4
   brainstormform add <id> more-questions.json     # append questions to a live form
   brainstormform wait <id> --timeout 600          # block until the user presses Finish
 

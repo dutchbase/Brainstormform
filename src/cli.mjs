@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { normalizeSpec, schemaText, guideText, VERSION, SpecError, normalizeProfile, profileSummary } from './schema.mjs';
-import { formatAnswers } from './render.mjs';
+import { formatAnswers, progressRecord } from './render.mjs';
 import { parseArgs } from './args.mjs';
 import {
   createSession,
@@ -198,29 +198,17 @@ async function cmdProgress(args) {
   if (!meta) return fail('unknown session "' + id + '".', 1);
   const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
-  const progressRev = progress.revision || 0;
   const since = args.since !== undefined ? Number(args.since) : null;
   const hasSince = Number.isFinite(since);
-  const upToDate = hasSince && since >= progressRev;
-  const oneBehind = hasSince && since === progressRev - 1;
-  const changed = Array.isArray(progress.changed) ? progress.changed : [];
-  const allAnswers = (final && final.answers) || progress.answers || {};
-  const allOther = progress.other || {};
-  const allNotes = (final && final.notes) || progress.notes || {};
-  const pick = (obj) => Object.fromEntries(changed.filter((k) => k in (obj || {})).map((k) => [k, obj[k]]));
-  const record = {
+  const record = progressRecord({
     sessionId: id,
     status: meta.status || (final ? 'submitted' : 'open'),
     revision: meta.revision,
-    progressRevision: progressRev,
-    changed: upToDate ? [] : changed,
     url: meta.url,
-    answered: Object.keys(progress.answers || {}).length,
-    answers: upToDate ? {} : oneBehind ? pick(allAnswers) : allAnswers,
-    other: upToDate ? {} : oneBehind ? pick(allOther) : allOther,
-    notes: upToDate ? {} : oneBehind ? pick(allNotes) : allNotes,
-    skipped: progress.skipped || [],
-  };
+    progress,
+    final,
+    since,
+  });
   if (hasSince) {
     print(record);
   } else if (args.format === 'json' || args.format === 'md') {

@@ -134,7 +134,7 @@ export async function startServer({
   let revision = 1;
   let status = 'open';
   let uploads = 0;
-  let progressRevision = 0;
+  let progressRevision = (await readJson(progressPath, null) || {}).revision || 0;
   let spec = initialSpec;
   let built = buildAssets(spec, token);
   const sse = new Set();

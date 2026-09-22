@@ -27,14 +27,15 @@ agent in the loop (see [schema.md](schema.md)).
 ```bash
 brainstormform ask questions.json --open     # {"sessionId":"bf-...","url":"..."}
 brainstormform progress <id>                 # draft answers + status
-brainstormform progress <id> --since 4       # only what changed since progressRevision 4
+brainstormform progress <id> --since 4       # also list the ids changed since progressRevision 4
 brainstormform add <id> followups.json       # append questions
 brainstormform wait <id> --timeout 600       # resolves on Finish
 ```
 
-`--since` keeps the poll cheap: the server records which question ids changed on
-every save and returns only those. If more than one save was missed it falls back
-to the full answers, so nothing is lost.
+`answers` is always the full current answers — reading with `--since` can never
+make earlier answers look lost. The server records which question ids changed on
+every save and `--since` narrows the separate `changed` list to those, so a poll
+can still cheaply tell what is new.
 
 ## MCP
 
@@ -45,8 +46,9 @@ add_questions({ sessionId, questions: [...] })      -> { revision, questionCount
 wait_for_answers({ sessionId, timeoutSeconds: 600 })-> final answers
 ```
 
-`read_answers` also accepts `since:<progressRevision>` to return only changed
-answers. `format` may be `full` (default), `json` or `md`.
+`read_answers` also accepts `since:<progressRevision>`; `answers` stays the full
+current set and `changed` lists the ids updated after that revision. `format` may
+be `full` (default), `json` or `md`.
 
 ## How it works
 

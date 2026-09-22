@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeSpec, VERSION, SpecError, guideText, profileSummary } from './schema.mjs';
-import { formatAnswers } from './render.mjs';
+import { formatAnswers, progressRecord } from './render.mjs';
 import {
   createSession,
   startDetachedServer,
@@ -128,7 +128,7 @@ const READ_SCHEMA = {
   properties: {
     sessionId: { type: 'string' },
     format: { enum: ['full', 'json', 'md'], description: 'Answer shape; "json" is a compact id→value map, "md" is Markdown (default full)' },
-    since: { type: 'number', description: 'Only return answers changed since this progressRevision' },
+    since: { type: 'number', description: 'Return the ids in "changed" that were updated after this progressRevision (empty when up to date). "answers" is always the full current set.' },
   },
   required: ['sessionId'],
 };
@@ -196,29 +196,17 @@ async function callRead(args) {
   if (!meta) return textResult('Unknown session "' + sessionId + '".', true);
   const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
-  const progressRev = progress.revision || 0;
   const since = args.since !== undefined ? Number(args.since) : null;
   const hasSince = Number.isFinite(since);
-  const upToDate = hasSince && since >= progressRev;
-  const oneBehind = hasSince && since === progressRev - 1;
-  const changed = Array.isArray(progress.changed) ? progress.changed : [];
-  const allAnswers = (final && final.answers) || progress.answers || {};
-  const allOther = progress.other || {};
-  const allNotes = (final && final.notes) || progress.notes || {};
-  const pick = (obj) => Object.fromEntries(changed.filter((k) => k in (obj || {})).map((k) => [k, obj[k]]));
-  const record = {
+  const record = progressRecord({
     sessionId,
     status: meta.status || (final ? 'submitted' : 'open'),
     revision: meta.revision,
-    progressRevision: progressRev,
-    changed: upToDate ? [] : changed,
     url: meta.url,
-    answered: Object.keys(progress.answers || {}).length,
-    answers: upToDate ? {} : oneBehind ? pick(allAnswers) : allAnswers,
-    other: upToDate ? {} : oneBehind ? pick(allOther) : allOther,
-    notes: upToDate ? {} : oneBehind ? pick(allNotes) : allNotes,
-    skipped: progress.skipped || [],
-  };
+    progress,
+    final,
+    since,
+  });
   const format = args.format || 'full';
   if (hasSince || format === 'full') return textResult(record);
   const spec = await readJson(path.join(dir, 'questions.json'), null);
@@ -280,7 +268,7 @@ export async function handle(msg) {
         {
           name: 'read_answers',
           description:
-            'Read the answers so far in a live session (non-blocking), plus status and per-question notes. Pass format:"json" for a compact id→value map, format:"md" for Markdown, or since:<progressRevision> to return only what changed.',
+            'Read the answers so far in a live session (non-blocking), plus status and per-question notes. "answers" is always the full current set. Pass format:"json" for a compact id→value map, format:"md" for Markdown, or since:<progressRevision> to have "changed" list only the ids updated since then.',
           inputSchema: READ_SCHEMA,
         },
         {
