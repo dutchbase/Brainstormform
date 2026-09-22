@@ -286,3 +286,25 @@ test('assertSafeDest allows an empty or session-looking directory', async () => 
   await assertSafeDest(sessionish, false);
   await fsp.rm(dir, { recursive: true, force: true });
 });
+
+test('progress writes a revision and changed ids', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-delta-'));
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }, { id: 'b', type: 'text', label: 'B' }] });
+  const token = 'delta'.repeat(6);
+  const srv = await startServer({ sessionDir: dir, spec, token });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    const post = (answers) => fetch(`${base}/api/progress`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ answers }) });
+    await post({ a: 'one' });
+    let saved = JSON.parse(await fsp.readFile(path.join(dir, 'progress.json'), 'utf8'));
+    assert.equal(saved.revision, 1);
+    assert.deepEqual(saved.changed, ['a']);
+    await post({ a: 'one', b: 'two' });
+    saved = JSON.parse(await fsp.readFile(path.join(dir, 'progress.json'), 'utf8'));
+    assert.equal(saved.revision, 2);
+    assert.deepEqual(saved.changed, ['b']);
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});

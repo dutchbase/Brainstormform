@@ -105,6 +105,7 @@ export async function startServer({
   let revision = 1;
   let status = 'open';
   let uploads = 0;
+  let progressRevision = 0;
   let spec = initialSpec;
   let built = buildAssets(spec, token);
   const sse = new Set();
@@ -278,14 +279,27 @@ export async function startServer({
         sendJson(res, 400, { error: 'invalid JSON' });
         return;
       }
+      const prev = (await readJson(progressPath, null)) || {};
+      const nextAnswers = payload.answers || {};
+      const changed = new Set();
+      const track = (before, after) => {
+        const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+        for (const key of keys) if (JSON.stringify((before || {})[key]) !== JSON.stringify((after || {})[key])) changed.add(key);
+      };
+      track(prev.answers, nextAnswers);
+      track(prev.other, payload.other);
+      track(prev.notes, payload.notes);
+      progressRevision += 1;
       await writeJsonAtomic(progressPath, {
-        answers: payload.answers || {},
+        answers: nextAnswers,
         other: payload.other || {},
         notes: payload.notes && typeof payload.notes === 'object' ? payload.notes : {},
         skipped: Array.isArray(payload.skipped) ? payload.skipped : [],
+        revision: progressRevision,
+        changed: [...changed],
         updatedAt: new Date().toISOString(),
       });
-      sendJson(res, 200, { ok: true, revision, status });
+      sendJson(res, 200, { ok: true, revision, progressRevision, status });
       return;
     }
 
