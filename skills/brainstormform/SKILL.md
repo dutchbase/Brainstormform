@@ -24,6 +24,31 @@ If the brainstorming skill is not installed, Brainstormform provides a copy.
 `brainstormform install-skill` installs both skills into your agent's skill
 directory (the bundled brainstorming copy is skipped when one is already there).
 
+## Personalize the questions
+
+Before writing questions, know who you are writing them for.
+
+- `ask`/`ask_questions` returns a short `profile` summary. Read the **full**
+  profile once with `brainstormform profile` (CLI) or `get_profile` (MCP), and
+  tailor wording to it. For follow-up forms in the same session the profile is
+  already in your context — do not fetch it again.
+- No profile yet (`configured: false`, or `profile.profileHint` says so)? Ask for
+  one first, then continue:
+
+  ```bash
+  brainstormform ask --preset profile --save-profile --open
+  brainstormform wait bf-...
+  ```
+
+  MCP: `ask_questions({ preset: "profile", saveAsProfile: true })`.
+
+- Tailor by `experience`: `new`/`learning` → plain language, define jargon, add
+  context and examples, split the hard questions into smaller ones; `professional`
+  → normal technical language; `senior`/`expert` → terse and precise, skip basics.
+- Honour `languageLevel` (`plain`/`standard`/`technical`), `detail`
+  (`brief`/`normal`/`detailed`) and `examples`.
+- Write question text in the profile's `language` when set.
+
 ## First: pick the right tool
 
 Use the **built-in question tool** when the exchange is small and static:
