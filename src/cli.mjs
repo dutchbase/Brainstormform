@@ -89,7 +89,19 @@ async function deliver(id, answers, meta, format) {
 
 async function cmdAsk(args) {
   const source = args._[0];
-  const raw = await readInput(source);
+  let raw;
+  if (args.preset) {
+    const dir = path.resolve(__dirname, '..', 'presets');
+    const presetPath = path.join(dir, String(args.preset) + '.json');
+    try {
+      raw = await fsp.readFile(presetPath, 'utf8');
+    } catch {
+      const names = await fsp.readdir(dir).catch(() => []);
+      return fail('unknown preset "' + args.preset + '". Available: ' + names.map((n) => n.replace(/\.json$/, '')).join(', '));
+    }
+  } else {
+    raw = await readInput(source);
+  }
   if (raw === null) return fail('no input: pass a questions file, or pipe JSON on stdin.');
 
   let spec;
@@ -394,7 +406,7 @@ function helpText() {
 Usage:
   brainstormform ask [questions.json|-] [--open|--no-open] [--keep]
                      [--out [dir]] [--commit] [--archive] [--force] [--from <id>]
-                     [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
+                     [--preset <name>] [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
   brainstormform progress <id>                 # current draft answers + status
   brainstormform add <id> <fragment.json|->    # append questions to a live form
   brainstormform wait <id> [--timeout s]       # block until the user presses Finish

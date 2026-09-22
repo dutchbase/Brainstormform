@@ -1,0 +1,47 @@
+{
+  "title": "Product discovery",
+  "intro": "A few questions to frame the work. Answers save as you type.",
+  "settings": { "pageSize": 5 },
+  "categories": [
+    {
+      "title": "Scope",
+      "questions": [
+        { "id": "goal", "type": "textarea", "label": "What is the primary goal?", "required": true },
+        { "id": "audience", "type": "text", "label": "Who is this for?" },
+        {
+          "id": "platforms",
+          "type": "multi",
+          "label": "Which platforms must we support?",
+          "options": ["Web", "iOS", "Android", "Desktop"],
+          "allowOther": true
+        }
+      ]
+    },
+    {
+      "title": "Priorities",
+      "questions": [
+        {
+          "id": "priorities",
+          "type": "rank",
+          "label": "Order these priorities (most important first)",
+          "options": ["Speed to ship", "Quality", "Cost", "Flexibility"]
+        },
+        {
+          "id": "confidence",
+          "type": "matrix",
+          "label": "Rate your confidence in each area",
+          "rows": ["Scope", "Timeline", "Budget"],
+          "columns": ["Low", "Medium", "High"]
+        }
+      ]
+    },
+    {
+      "title": "Constraints",
+      "questions": [
+        { "id": "hard_deadline", "type": "boolean", "label": "Is there a hard deadline?" },
+        { "id": "deadline", "type": "text", "label": "What date?", "showIf": { "question": "hard_deadline", "equals": true } },
+        { "id": "constraints", "type": "textarea", "label": "Any other constraints or non-negotiables?" }
+      ]
+    }
+  ]
+}
