@@ -195,7 +195,9 @@ test('mcp: initialize, tools/list, resources, ping and errors', async () => {
     ['ask_questions', 'read_answers', 'add_questions', 'wait_for_answers'],
   );
 
-  assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 3, method: 'resources/list' })).result.resources, []);
+  assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 3, method: 'resources/list' })).result.resources.map((r) => r.uri), ['brainstormform://guide']);
+  const guide = await mcpHandle({ jsonrpc: '2.0', id: 6, method: 'resources/read', params: { uri: 'brainstormform://guide' } });
+  assert.match(guide.result.contents[0].text, /question format/i);
   assert.deepEqual((await mcpHandle({ jsonrpc: '2.0', id: 4, method: 'ping' })).result, {});
   assert.equal((await mcpHandle({ jsonrpc: '2.0', id: 5, method: 'nope' })).error.code, -32601);
   assert.equal(await mcpHandle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);

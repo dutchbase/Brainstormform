@@ -1,7 +1,8 @@
 import readline from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
-import { normalizeSpec, VERSION, SpecError } from './schema.mjs';
+import { normalizeSpec, VERSION, SpecError, guideText } from './schema.mjs';
+import { formatAnswers } from './render.mjs';
 import {
   createSession,
   startDetachedServer,
@@ -29,11 +30,12 @@ function error(id, code, message) {
 
 function textResult(payload, isError = false) {
   return {
-    content: [{ type: 'text', text: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2) }],
-    ...(typeof payload === 'string' ? {} : { structuredContent: payload }),
+    content: [{ type: 'text', text: typeof payload === 'string' ? payload : JSON.stringify(payload) }],
     isError,
   };
 }
+
+const GUIDE_URI = 'brainstormform://guide';
 
 const resourceUri = (sessionId) => `brainstormform://session/${sessionId}`;
 
@@ -85,15 +87,17 @@ function stopWatch(sessionId) {
   if (watcher) watcher.close();
 }
 
-async function finish(sessionId, answers, meta) {
+async function finish(sessionId, answers, meta, format = 'full') {
   let output = answers;
   if (meta && meta.keep) {
     const kept = await keepSession(sessionId, answers);
     output = kept.answers;
   }
+  let spec = null;
+  if (format !== 'full') spec = await readJson(path.join(sessionDir(sessionId), 'questions.json'), null);
   stopWatch(sessionId);
   await stopSession(sessionId);
-  return output;
+  return format === 'full' ? output : formatAnswers(spec, output, format);
 }
 
 const ASK_SCHEMA = {
@@ -112,7 +116,11 @@ const ASK_SCHEMA = {
 
 const READ_SCHEMA = {
   type: 'object',
-  properties: { sessionId: { type: 'string' } },
+  properties: {
+    sessionId: { type: 'string' },
+    format: { enum: ['full', 'json', 'md'], description: 'Answer shape; "json" is a compact id→value map, "md" is Markdown (default full)' },
+    since: { type: 'number', description: 'Only return answers changed since this progressRevision' },
+  },
   required: ['sessionId'],
 };
 
@@ -132,6 +140,7 @@ const WAIT_SCHEMA = {
   properties: {
     sessionId: { type: 'string' },
     timeoutSeconds: { type: 'number', description: 'How long to wait for Finish (default 600); 0 returns immediately so you can poll' },
+    format: { enum: ['full', 'json', 'md'], description: 'Answer shape (default full)' },
   },
   required: ['sessionId'],
 };
@@ -165,17 +174,33 @@ async function callRead(args) {
   if (!meta) return textResult('Unknown session "' + sessionId + '".', true);
   const progress = (await readJson(path.join(dir, 'progress.json'), null)) || { answers: {}, other: {}, notes: {}, skipped: [] };
   const final = await readJson(path.join(dir, 'answers.json'), null);
-  return textResult({
+  const progressRev = progress.revision || 0;
+  const since = args.since !== undefined ? Number(args.since) : null;
+  const hasSince = Number.isFinite(since);
+  const upToDate = hasSince && since >= progressRev;
+  const oneBehind = hasSince && since === progressRev - 1;
+  const changed = Array.isArray(progress.changed) ? progress.changed : [];
+  const allAnswers = (final && final.answers) || progress.answers || {};
+  const allOther = progress.other || {};
+  const allNotes = (final && final.notes) || progress.notes || {};
+  const pick = (obj) => Object.fromEntries(changed.filter((k) => k in (obj || {})).map((k) => [k, obj[k]]));
+  const record = {
     sessionId,
     status: meta.status || (final ? 'submitted' : 'open'),
     revision: meta.revision,
+    progressRevision: progressRev,
+    changed: upToDate ? [] : changed,
     url: meta.url,
     answered: Object.keys(progress.answers || {}).length,
-    answers: (final && final.answers) || progress.answers || {},
-    other: progress.other || {},
-    notes: (final && final.notes) || progress.notes || {},
+    answers: upToDate ? {} : oneBehind ? pick(allAnswers) : allAnswers,
+    other: upToDate ? {} : oneBehind ? pick(allOther) : allOther,
+    notes: upToDate ? {} : oneBehind ? pick(allNotes) : allNotes,
     skipped: progress.skipped || [],
-  });
+  };
+  const format = args.format || 'full';
+  if (hasSince || format === 'full') return textResult(record);
+  const spec = await readJson(path.join(dir, 'questions.json'), null);
+  return textResult(formatAnswers(spec, record, format));
 }
 
 async function callAdd(args) {
@@ -202,7 +227,7 @@ async function callWait(args) {
   const { answers, meta, error } = await waitForAnswers(sessionId, {
     timeoutMs: Number.isFinite(timeoutSeconds) ? Math.max(0, timeoutSeconds) * 1000 : 600000,
   });
-  if (answers) return textResult(await finish(sessionId, answers, meta));
+  if (answers) return textResult(await finish(sessionId, answers, meta, (args && args.format) || 'full'));
   if (error === 'unknown-session') return textResult('Unknown session "' + sessionId + '".', true);
   if (error === 'server-exited') return textResult('Session "' + sessionId + '" ended before submission.', true);
   return textResult({ status: 'open', sessionId, url: meta && meta.url });
@@ -227,12 +252,13 @@ export async function handle(msg) {
         {
           name: 'ask_questions',
           description:
-            'Open a live, paginated local web form with any number of questions (single/multi choice, image cards, text, number/scale, boolean, file upload), grouped into categories and optionally conditional. Returns a sessionId and url. Answers are saved as the user types; call read_answers to see progress and add_questions to append follow-ups while they are still answering. Every question also accepts a free-text note from the user, returned in "notes" keyed by question id — tell the user they can annotate any answer, it is the right place when no option fits. Prefer this over a built-in question tool when there are more than ~6 questions, when questions need sections, files or follow-ups, or when the user asked for a brainstorm.',
+            'Open a live, paginated local web form with any number of grouped, optionally conditional questions (choice/image/text/number/scale/boolean/file). Returns { sessionId, url }. Answers save as the user types; use read_answers and add_questions for follow-ups while they answer. Every question also takes a free-text note (returned in "notes") — tell the user they can annotate any answer. Prefer over a built-in question tool when there are more than ~6 questions, when sections/files/follow-ups are needed, or when the user asked for a brainstorm. See the brainstormform://guide resource for the full format.',
           inputSchema: ASK_SCHEMA,
         },
         {
           name: 'read_answers',
-          description: 'Read the answers the user has entered so far in a live session (non-blocking), plus submission status and any per-question notes.',
+          description:
+            'Read the answers so far in a live session (non-blocking), plus status and per-question notes. Pass format:"json" for a compact id→value map, format:"md" for Markdown, or since:<progressRevision> to return only what changed.',
           inputSchema: READ_SCHEMA,
         },
         {
@@ -242,7 +268,7 @@ export async function handle(msg) {
         },
         {
           name: 'wait_for_answers',
-          description: 'Block until the user presses Finish, then return the final answers and close the session.',
+          description: 'Block until the user presses Finish, then return the final answers and close the session. Accepts format:"json"|"md".',
           inputSchema: WAIT_SCHEMA,
         },
       ],
@@ -250,15 +276,21 @@ export async function handle(msg) {
   }
   if (method === 'resources/list') {
     return ok(id, {
-      resources: [...watchers.keys()].map((sessionId) => ({
-        uri: resourceUri(sessionId),
-        name: 'Brainstormform session ' + sessionId,
-        mimeType: 'application/json',
-      })),
+      resources: [
+        { uri: GUIDE_URI, name: 'Brainstormform question format', mimeType: 'text/markdown' },
+        ...[...watchers.keys()].map((sessionId) => ({
+          uri: resourceUri(sessionId),
+          name: 'Brainstormform session ' + sessionId,
+          mimeType: 'application/json',
+        })),
+      ],
     });
   }
   if (method === 'resources/read') {
     const uri = params && params.uri;
+    if (uri === GUIDE_URI) {
+      return ok(id, { contents: [{ uri, mimeType: 'text/markdown', text: guideText() }] });
+    }
     const sessionId = String(uri || '').replace('brainstormform://session/', '');
     const read = await callRead({ sessionId });
     return ok(id, {
