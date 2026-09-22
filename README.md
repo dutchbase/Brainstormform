@@ -116,8 +116,11 @@ when you answer.
 
 The skill installed by `setup` teaches the agent to choose between Brainstormform
 and its built-in question tool: small and static goes to the built-in tool, while
-more than a few questions, sections, uploads or live follow-ups come here. To
-install it on its own:
+more than a few questions, sections, uploads or live follow-ups come here. It
+also nudges the agent to use the superpowers **brainstorming** skill as the front
+end for creative work; a copy is bundled in `skills/brainstorming/` and installed
+by the same command when you don't already have one. To install them on their
+own:
 
 ```bash
 brainstormform install-skill
@@ -126,7 +129,7 @@ brainstormform install-skill
 ## Question types
 
 `single` · `multi` · `visual` · `text` · `textarea` · `number` · `scale` ·
-`boolean` · `file`
+`boolean` · `file` · `matrix` · `rank`
 
 Questions support Markdown help text, conditional `showIf`, and suggestions.
 The full format is in [docs/schema.md](docs/schema.md).

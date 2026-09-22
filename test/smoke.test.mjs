@@ -275,6 +275,13 @@ test('the published package includes its docs and changelog', async () => {
   }
 });
 
+test('the bundled brainstorming skill ships with its attribution', async () => {
+  const dir = new URL('../skills/brainstorming/', import.meta.url);
+  await fsp.access(new URL('SKILL.md', dir));
+  const notice = await fsp.readFile(new URL('NOTICE', dir), 'utf8');
+  assert.match(notice, /MIT License/);
+});
+
 test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export-'));
   const dest = path.join(dir, 'cwd');

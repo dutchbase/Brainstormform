@@ -10,6 +10,18 @@ number of questions. Answers are saved as the user types, you can read them
 mid-session and append follow-ups, and you only get the "done" signal when the
 user presses Finish.
 
+## Pair with the brainstorming skill
+
+For any creative work, start with the **brainstorming skill** (superpowers:
+`brainstorming`) to classify the task and draw out intent, requirements and
+design. Then use Brainstormform as the question surface: instead of asking
+clarifying questions one at a time, open a live form so the user can answer them
+all in one sitting, with categories, files and conditional follow-ups.
+
+If the brainstorming skill is not installed, Brainstormform ships a copy of it.
+`brainstormform install-skill` installs both skills into your agent's skill
+directory (the bundled brainstorming copy is skipped when one is already there).
+
 ## First: pick the right tool
 
 Use the **built-in question tool** when the exchange is small and static:

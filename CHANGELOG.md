@@ -10,6 +10,12 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ### Added
 
+- **Bundled `brainstorming` skill.** A copy of the superpowers brainstorming
+  skill (MIT, see `skills/brainstorming/NOTICE`) ships in the repo and is
+  installed by `install-skill`/`setup` when no copy is present, so agents
+  without superpowers can still elicit intent and requirements before building.
+  The Brainstormform skill tells agents to pair the two: brainstorming as the
+  front end, Brainstormform as the question surface.
 - **Opt-in compact and Markdown answers.** `wait`, `get`, `progress` and `export`
   accept `--format json` (a compact `{ answers: { id: value }, notes? }` map) or
   `--format md` (a Markdown summary). The MCP `read_answers` /
@@ -62,6 +68,9 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ### Fixed
 
+- A question's **note is always free text.** Editing the note on a number (or
+  any) question no longer fell through to the answer handler and overwrote the
+  answer — for a number question it coerced the note with `Number()`.
 - `--out` / `export --to` no longer recursively delete a non-empty destination
   that is not a session directory; pass `--force` to override.
 - Oversized request bodies stop being read as soon as the limit is crossed.

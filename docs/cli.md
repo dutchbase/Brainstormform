@@ -81,7 +81,9 @@ brainstormform archive list                   # list archived sessions
 ## install-skill
 
 Install the agent skill that tells agents when to use Brainstormform instead of
-their built-in question tool.
+their built-in question tool. It also installs the bundled superpowers
+`brainstorming` skill (see [install.md](install.md)) unless a copy is already
+present.
 
 ```bash
 brainstormform install-skill                       # all detected agents

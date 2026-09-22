@@ -11,12 +11,33 @@ import { VERSION } from './schema.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstormform', 'SKILL.md');
+const BRAINSTORM_SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstorming');
 
 async function installSkillTo(dir, actions) {
   const dest = path.join(dir, 'brainstormform', 'SKILL.md');
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   await fsp.copyFile(SKILL_SRC, dest);
   actions.push({ action: 'skill', path: dest });
+}
+
+async function installBrainstormSkill(dir, actions) {
+  const destDir = path.join(dir, 'brainstorming');
+  const marker = path.join(destDir, 'SKILL.md');
+  try {
+    await fsp.access(marker);
+    actions.push({ action: 'skill-present', path: marker });
+    return;
+  } catch {
+    /* install the bundled copy */
+  }
+  try {
+    await fsp.access(path.join(BRAINSTORM_SKILL_SRC, 'SKILL.md'));
+  } catch {
+    return;
+  }
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.cp(BRAINSTORM_SKILL_SRC, destDir, { recursive: true });
+  actions.push({ action: 'skill', path: marker });
 }
 
 async function writeConfig(agent, binPath, nodePath, actions) {
@@ -83,8 +104,15 @@ export async function runSetup({ yes = false, targets, log = () => {} } = {}) {
 
   if (chosen.length) {
     await installSkillTo(dirs.shared, actions);
-    if (chosen.some((a) => a.id === 'opencode')) await installSkillTo(dirs.opencode, actions);
-    if (chosen.some((a) => a.id === 'claude')) await installSkillTo(dirs.claude, actions);
+    await installBrainstormSkill(dirs.shared, actions);
+    if (chosen.some((a) => a.id === 'opencode')) {
+      await installSkillTo(dirs.opencode, actions);
+      await installBrainstormSkill(dirs.opencode, actions);
+    }
+    if (chosen.some((a) => a.id === 'claude')) {
+      await installSkillTo(dirs.claude, actions);
+      await installBrainstormSkill(dirs.claude, actions);
+    }
   }
 
   for (const agent of chosen) {

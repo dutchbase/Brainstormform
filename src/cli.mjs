@@ -27,6 +27,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstormform', 'SKILL.md');
+const BRAINSTORM_SKILL_SRC = path.resolve(__dirname, '..', 'skills', 'brainstorming');
 
 let JSON_MODE = false;
 
@@ -314,6 +315,21 @@ function skillRoots() {
   };
 }
 
+async function installBrainstormingSkill(root, installed, skipped) {
+  const destDir = path.join(root, 'brainstorming');
+  const marker = path.join(destDir, 'SKILL.md');
+  try {
+    await fsp.access(marker);
+    skipped.push(marker);
+    return;
+  } catch {
+    /* not installed yet */
+  }
+  await fsp.mkdir(root, { recursive: true });
+  await fsp.cp(BRAINSTORM_SKILL_SRC, destDir, { recursive: true });
+  installed.push(marker);
+}
+
 async function cmdInstallSkill(args) {
   if (args.list) {
     print(skillRoots());
@@ -326,13 +342,16 @@ async function cmdInstallSkill(args) {
   }
   const roots = skillRoots();
   const installed = [];
+  const skipped = [];
 
   if (args.dir) {
-    const dest = path.resolve(String(args.dir), 'brainstormform', 'SKILL.md');
+    const root = path.resolve(String(args.dir));
+    const dest = path.join(root, 'brainstormform', 'SKILL.md');
     await fsp.mkdir(path.dirname(dest), { recursive: true });
     await fsp.copyFile(SKILL_SRC, dest);
     installed.push(dest);
-    print({ installed, restart: 'Restart your agent so it picks up the new skill.' });
+    if (await bundleAvailable()) await installBrainstormingSkill(root, installed, skipped);
+    print({ installed, ...(skipped.length ? { skipped } : {}), restart: 'Restart your agent so it picks up the new skills.' });
     return 0;
   }
 
@@ -346,10 +365,20 @@ async function cmdInstallSkill(args) {
     await fsp.mkdir(path.dirname(dest), { recursive: true });
     await fsp.copyFile(SKILL_SRC, dest);
     installed.push(dest);
+    if (await bundleAvailable()) await installBrainstormingSkill(root, installed, skipped);
   }
 
-  print({ installed, restart: 'Restart your agent so it picks up the new skill.' });
+  print({ installed, ...(skipped.length ? { skipped } : {}), restart: 'Restart your agent so it picks up the new skills.' });
   return 0;
+}
+
+async function bundleAvailable() {
+  try {
+    await fsp.access(path.join(BRAINSTORM_SKILL_SRC, 'SKILL.md'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function cmdSetup(args) {

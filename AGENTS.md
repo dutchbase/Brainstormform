@@ -22,6 +22,16 @@ Use **Brainstormform** when any of these is true:
 
 The same rule is shipped as a skill in `skills/brainstormform/SKILL.md`.
 
+## Brainstorming skill
+
+For creative work, the superpowers `brainstorming` skill is the front end that
+draws out intent, requirements and design; Brainstormform is the question
+surface. Agents that have superpowers installed should use it directly. For
+agents that do not, a copy is bundled at `skills/brainstorming/` (vendored under
+MIT, see `skills/brainstorming/NOTICE`), and `brainstormform install-skill`
+installs it alongside the Brainstormform skill, skipping it when a copy is
+already present.
+
 ## Using it
 
 ```bash
@@ -59,6 +69,7 @@ Run `brainstormform guide` for the full question format.
 | `src/setup.mjs` / `src/doctor.mjs` | Installer and diagnostics |
 | `src/ui.html` | Front end |
 | `skills/brainstormform/SKILL.md` | The agent skill |
+| `skills/brainstorming/` | Vendored superpowers brainstorming skill (MIT) |
 | `docs/` | Schema, CLI, MCP, live sessions, install |
 
 ## Commits

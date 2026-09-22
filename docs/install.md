@@ -38,7 +38,9 @@ Once the package is on npm you will be able to use `npx brainstormform` and
 An interactive wizard that detects the agents on your machine and wires
 Brainstormform in:
 
-- installs the skill so the agent knows when to use it,
+- installs the skills so the agent knows when to use it — the Brainstormform
+  skill plus the bundled superpowers `brainstorming` skill (skipped when a copy
+  is already installed),
 - writes the MCP entry for each detected agent (Claude Code, Codex, opencode,
   Cursor, Gemini CLI),
 - runs `doctor` and prints anything that needs attention.
@@ -128,7 +130,8 @@ brainstormform update           # npm-based self-update
 brainstormform update --check   # just report
 
 npm uninstall -g brainstormform
-rm -rf ~/.agents/skills/brainstormform ~/.claude/skills/brainstormform
+rm -rf ~/.agents/skills/brainstormform ~/.agents/skills/brainstorming \
+       ~/.claude/skills/brainstormform ~/.claude/skills/brainstorming
 ```
 
 ## Troubleshooting
