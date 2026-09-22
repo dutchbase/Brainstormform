@@ -349,6 +349,17 @@ test('submit with saveProfile writes the global profile from the answers', async
   }
 });
 
+test('createSession records saveProfile in meta', async () => {
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }] });
+  const { id } = await createSession(spec, { saveProfile: true });
+  try {
+    const meta = JSON.parse(await fsp.readFile(path.join(sessionDir(id), 'meta.json'), 'utf8'));
+    assert.equal(meta.saveProfile, true);
+  } finally {
+    await stopSession(id);
+  }
+});
+
 test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export-'));
   const dest = path.join(dir, 'cwd');

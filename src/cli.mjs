@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { normalizeSpec, schemaText, guideText, VERSION, SpecError } from './schema.mjs';
+import { normalizeSpec, schemaText, guideText, VERSION, SpecError, normalizeProfile, profileSummary } from './schema.mjs';
 import { formatAnswers } from './render.mjs';
 import { parseArgs } from './args.mjs';
 import {
@@ -23,6 +23,10 @@ import {
   resolveOutDir,
   seedSession,
   isAlive,
+  readProfile,
+  writeProfile,
+  clearProfile,
+  profilePath,
 } from './session.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -127,6 +131,7 @@ async function cmdAsk(args) {
     commit: args.commit === true,
     archive: args.archive === true,
     force: args.force === true,
+    saveProfile: args['save-profile'] === true,
     onSubmit: args['on-submit'] ? String(args['on-submit']) : undefined,
   };
   const open = args['no-open'] !== true;
@@ -136,7 +141,16 @@ async function cmdAsk(args) {
   const { id } = await createSession(spec, options);
   const meta = await startDetachedServer(id, { open, idleTimeout, maxUpload });
 
-  print({ sessionId: id, url: meta.url, pid: meta.pid });
+  const profile = await readProfile();
+  print({
+    sessionId: id,
+    url: meta.url,
+    pid: meta.pid,
+    profile: profileSummary(profile),
+    profileHint: profile
+      ? 'Tailor your questions to this profile. Run `brainstormform profile` for the full details.'
+      : 'No profile yet. Run `brainstormform ask --preset profile --save-profile` first so questions can be tailored to the user.',
+  });
   process.stderr.write(
     'brainstormform: form is live. The user can answer at their own pace.\n' +
       '  add follow-ups:  brainstormform add ' + id + ' fragment.json\n' +
@@ -306,6 +320,37 @@ async function cmdCleanup() {
   return 0;
 }
 
+async function cmdProfile(args) {
+  const sub = args._[0];
+  if (sub === 'path') {
+    print({ path: profilePath() });
+    return 0;
+  }
+  if (sub === 'clear') {
+    await clearProfile();
+    print({ cleared: true });
+    return 0;
+  }
+  if (sub === 'set') {
+    const raw = await readInput(args._[1]);
+    if (raw === null) return fail('no profile: pass a JSON file, or pipe JSON on stdin.');
+    let profile;
+    try {
+      profile = normalizeProfile(JSON.parse(raw));
+    } catch (err) {
+      if (err instanceof SpecError || err instanceof SyntaxError) return fail('invalid profile: ' + err.message);
+      throw err;
+    }
+    await writeProfile(profile);
+    print({ ok: true, path: profilePath(), profile });
+    return 0;
+  }
+  if (sub) return fail('usage: brainstormform profile [set <file|-> | path | clear]');
+  const profile = await readProfile();
+  print({ path: profilePath(), profile, summary: profileSummary(profile) });
+  return 0;
+}
+
 function skillRoots() {
   const home = os.homedir();
   return {
@@ -435,13 +480,15 @@ function helpText() {
 Usage:
   brainstormform ask [questions.json|-] [--open|--no-open] [--keep]
                      [--out [dir]] [--commit] [--archive] [--force] [--from <id>]
-                     [--preset <name>] [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
+                     [--preset <name>] [--save-profile]
+                     [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
   brainstormform progress <id>                 # current draft answers + status
   brainstormform add <id> <fragment.json|->    # append questions to a live form
   brainstormform wait <id> [--timeout s]       # block until the user presses Finish
   brainstormform get <id>                      # non-blocking poll
   brainstormform export <id> --to <dir>        # materialise a finished session
   brainstormform archive list
+  brainstormform profile [set <file|-> | path | clear]
   brainstormform setup [--target claude,codex,opencode] [--yes]
   brainstormform doctor [--json]
   brainstormform update [--check]
@@ -449,7 +496,7 @@ Usage:
   brainstormform list | stop <id> | resume <id> | cleanup
   brainstormform schema | guide | mcp | version
 
-ask prints {"sessionId","url","pid"}. Answers are saved to the server as the user
+ask prints {"sessionId","url","pid","profile"}. Answers are saved to the server as the user
 types, so "progress" reflects live input and "add" can append follow-up questions
 while the user is still answering. "wait" resolves only when the user finishes.
 Run "brainstormform guide" for the question format.
@@ -492,6 +539,8 @@ export async function main(argv) {
       return cmdResume(args);
     case 'cleanup':
       return cmdCleanup();
+    case 'profile':
+      return cmdProfile(args);
     case 'schema':
       process.stdout.write(schemaText() + '\n');
       return 0;

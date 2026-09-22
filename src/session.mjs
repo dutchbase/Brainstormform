@@ -97,7 +97,7 @@ export async function writeJsonAtomic(file, value) {
   await fsp.rename(tmp, file);
 }
 
-export async function createSession(spec, { keep, out, commit, archive, onSubmit } = {}) {
+export async function createSession(spec, { keep, out, commit, archive, onSubmit, saveProfile } = {}) {
   const id = newSessionId();
   const dir = sessionDir(id);
   await fsp.mkdir(path.join(dir, 'uploads'), { recursive: true });
@@ -110,6 +110,7 @@ export async function createSession(spec, { keep, out, commit, archive, onSubmit
     out: out === undefined || out === false ? false : out === true ? true : String(out),
     commit: commit === true,
     archive: archive === true,
+    saveProfile: saveProfile === true,
     onSubmit: onSubmit ? String(onSubmit) : undefined,
     status: 'open',
     revision: 1,
