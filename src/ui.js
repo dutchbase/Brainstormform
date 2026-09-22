@@ -552,6 +552,7 @@ async function handleFiles(qid, fileList) {
 }
 
 function applyAnswerFromChange(host, t) {
+  if (t.dataset && (t.dataset.noteField !== undefined || t.dataset.other !== undefined)) return;
   const q = state.byId[host.dataset.qid];
   if (!q) return;
   if (q.type === 'single' || (q.type === 'visual' && !q.multiple)) state.answers[q.id] = t.value;
@@ -585,6 +586,7 @@ function maybeAdvance() {
 mainEl.addEventListener('change', (e) => {
   const t = e.target;
   if (t.matches('input[type=file]')) { handleFiles(t.dataset.file, t.files); t.value = ''; return; }
+  if (t.dataset && (t.dataset.noteField !== undefined || t.dataset.other !== undefined)) return;
   const host = t.closest('[data-qid]');
   if (!host) return;
   const before = visibleKey();
