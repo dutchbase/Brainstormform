@@ -6,8 +6,8 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
-import { readJson, writeJsonAtomic, sessionDir, openBrowser } from './session.mjs';
-import { appendFragment, allQuestions, SpecError } from './schema.mjs';
+import { readJson, writeJsonAtomic, sessionDir, openBrowser, readProfile, writeProfile, clearProfile, profilePath } from './session.mjs';
+import { appendFragment, allQuestions, SpecError, normalizeProfile, profileFromAnswers } from './schema.mjs';
 import { evaluateShowIf } from './render.mjs';
 import { parseArgs } from './args.mjs';
 
@@ -97,6 +97,7 @@ export async function startServer({
   onSubmitted,
   onActivity,
   onSubmitCommand,
+  saveProfile = false,
 }) {
   const uploadsDir = path.join(dir, 'uploads');
   const answersPath = path.join(dir, 'answers.json');
@@ -260,6 +261,46 @@ export async function startServer({
     if (action === 'status' && req.method === 'GET') {
       const answers = await readJson(answersPath, null);
       sendJson(res, 200, { submitted: !!answers, status, revision });
+      return;
+    }
+
+    if (action === 'profile' && req.method === 'GET') {
+      sendJson(res, 200, { profile: await readProfile(), path: profilePath() });
+      return;
+    }
+
+    if (action === 'profile' && req.method === 'POST') {
+      let body;
+      try {
+        body = await readBody(req, 1024 * 1024);
+      } catch {
+        sendJson(res, 413, { error: 'profile too large' });
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(body.toString('utf8'));
+      } catch {
+        sendJson(res, 400, { error: 'invalid JSON' });
+        return;
+      }
+      if (payload && payload.clear) {
+        await clearProfile();
+        sendJson(res, 200, { ok: true, profile: null });
+        return;
+      }
+      let profile;
+      try {
+        profile = normalizeProfile(payload && payload.profile ? payload.profile : payload);
+      } catch (err) {
+        if (err instanceof SpecError) {
+          sendJson(res, 400, { error: err.message });
+          return;
+        }
+        throw err;
+      }
+      await writeProfile(profile);
+      sendJson(res, 200, { ok: true, profile });
       return;
     }
 
@@ -445,6 +486,13 @@ export async function startServer({
       };
       await writeJsonAtomic(answersPath, record);
       status = 'submitted';
+      if (saveProfile) {
+        try {
+          await writeProfile(profileFromAnswers(record));
+        } catch {
+          /* a malformed profile form must not fail the submission */
+        }
+      }
       await runThenRules(rawAnswers(record.answers));
       await syncMeta({ submittedAt: record.submittedAt });
       broadcast('state', { revision, status });
@@ -530,6 +578,7 @@ async function runDaemon() {
     maxUpload,
     onActivity: () => touch(),
     onSubmitCommand: meta.onSubmit,
+    saveProfile: meta.saveProfile === true,
   });
 
   await writeJsonAtomic(path.join(dir, 'meta.json'), { ...meta, pid: process.pid, port, url });

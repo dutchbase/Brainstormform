@@ -299,6 +299,56 @@ test('profile IO round-trips and clears', async () => {
   }
 });
 
+test('profile API reads, writes and clears', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-profapi-'));
+  const prev = process.env.XDG_CONFIG_HOME;
+  const cfg = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-profcfg-'));
+  process.env.XDG_CONFIG_HOME = cfg;
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }] });
+  const token = 'prof'.repeat(8);
+  const srv = await startServer({ sessionDir: dir, spec, token });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    assert.equal((await (await fetch(`${base}/api/profile`)).json()).profile, null);
+    const saved = await fetch(`${base}/api/profile`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile: { name: 'Ada', experience: 'learning' } }),
+    });
+    assert.equal(saved.status, 200);
+    assert.equal((await (await fetch(`${base}/api/profile`)).json()).profile.experience, 'learning');
+    await fetch(`${base}/api/profile`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clear: true }) });
+    assert.equal((await (await fetch(`${base}/api/profile`)).json()).profile, null);
+  } finally {
+    process.env.XDG_CONFIG_HOME = prev;
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.rm(cfg, { recursive: true, force: true });
+  }
+});
+
+test('submit with saveProfile writes the global profile from the answers', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-profsave-'));
+  const prev = process.env.XDG_CONFIG_HOME;
+  const cfg = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-profsave-cfg-'));
+  process.env.XDG_CONFIG_HOME = cfg;
+  const spec = normalizeSpec({ questions: [{ id: 'experience', type: 'single', label: 'E', options: ['new', 'learning'] }] });
+  const token = 'save'.repeat(8);
+  const srv = await startServer({ sessionDir: dir, spec, token, saveProfile: true });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    await fetch(`${base}/api/submit`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: { experience: { type: 'single', value: 'learning' } }, skipped: [], unanswered: [], hidden: [] }),
+    });
+    assert.equal((await readProfile()).experience, 'learning');
+  } finally {
+    process.env.XDG_CONFIG_HOME = prev;
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.rm(cfg, { recursive: true, force: true });
+  }
+});
+
 test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export-'));
   const dest = path.join(dir, 'cwd');
