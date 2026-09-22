@@ -1,4 +1,6 @@
 import fsp from 'node:fs/promises';
+import fs from 'node:fs';
+import { EventEmitter } from 'node:events';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -121,27 +123,48 @@ export async function startDetachedServer(id, { open, idleTimeout, maxUpload } =
   return meta;
 }
 
-export async function waitForAnswers(id, { timeoutMs = 600000, pollMs = 300 } = {}) {
+export async function waitForAnswers(id, { timeoutMs = 600000, pollMs = 1000 } = {}) {
   const dir = sessionDir(id);
   const file = path.join(dir, 'answers.json');
   const start = Date.now();
   let meta = await readJson(path.join(dir, 'meta.json'), null);
   if (!meta) return { answers: null, dir, error: 'unknown-session' };
 
-  while (true) {
-    const answers = await readJson(file, null);
-    if (answers) return { answers, dir, meta };
+  const watcher = new EventEmitter();
+  let fsw = null;
+  try {
+    fsw = fs.watch(dir, () => watcher.emit('tick'));
+  } catch {
+    fsw = null;
+  }
 
-    meta = (await readJson(path.join(dir, 'meta.json'), null)) || meta;
-    if (meta.pid && !isAlive(meta.pid)) {
-      const late = await readJson(file, null);
-      if (late) return { answers: late, dir, meta };
-      return { answers: null, dir, meta, error: 'server-exited' };
+  try {
+    while (true) {
+      const answers = await readJson(file, null);
+      if (answers) return { answers, dir, meta };
+
+      meta = (await readJson(path.join(dir, 'meta.json'), null)) || meta;
+      if (meta.pid && !isAlive(meta.pid)) {
+        const late = await readJson(file, null);
+        if (late) return { answers: late, dir, meta };
+        return { answers: null, dir, meta, error: 'server-exited' };
+      }
+      if (Number.isFinite(timeoutMs) && Date.now() - start >= timeoutMs) {
+        return { answers: null, dir, meta, error: 'timeout' };
+      }
+      const remaining = Number.isFinite(timeoutMs) ? timeoutMs - (Date.now() - start) : pollMs;
+      const wait = Math.min(pollMs, Math.max(0, remaining));
+      await Promise.race([
+        new Promise((resolve) => {
+          if (fsw) watcher.once('tick', resolve);
+          else setTimeout(resolve, pollMs);
+        }),
+        sleep(wait),
+      ]);
     }
-    if (Number.isFinite(timeoutMs) && Date.now() - start >= timeoutMs) {
-      return { answers: null, dir, meta, error: 'timeout' };
-    }
-    await sleep(pollMs);
+  } finally {
+    watcher.removeAllListeners();
+    if (fsw) fsw.close();
   }
 }
 
