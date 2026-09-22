@@ -486,3 +486,14 @@ ${JSON.stringify(EXAMPLE, null, 2)}
 export function exampleSpec() {
   return JSON.parse(JSON.stringify(EXAMPLE));
 }
+
+export function seedDefaults(spec, answers) {
+  const byId = new Map();
+  for (const [id, entry] of Object.entries(answers || {})) {
+    const value = entry && typeof entry === 'object' && !Array.isArray(entry) && 'type' in entry ? entry.value : entry;
+    if (value !== undefined && value !== null && value !== '') byId.set(id, value);
+  }
+  const out = JSON.parse(JSON.stringify(spec));
+  for (const q of out.categories.flatMap((c) => c.questions)) if (byId.has(q.id)) q.default = byId.get(q.id);
+  return out;
+}

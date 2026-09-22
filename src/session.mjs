@@ -191,6 +191,14 @@ export async function keepSession(id, answers) {
   return exportSession(id, answers, path.join(process.cwd(), `brainstormform-${id}`));
 }
 
+export async function seedSession(fromId, spec) {
+  const dir = sessionDir(fromId);
+  const record = (await readJson(path.join(dir, 'answers.json'), null)) || (await readJson(path.join(dir, 'progress.json'), null));
+  if (!record) throw new Error('source session "' + fromId + '" has no answers yet.');
+  const { seedDefaults } = await import('./schema.mjs');
+  return seedDefaults(spec, record.answers || {});
+}
+
 export function resolveOutDir(meta, id) {
   if (meta.out === true) return path.join(process.cwd(), '.brainstormform', id);
   return path.resolve(process.cwd(), String(meta.out));

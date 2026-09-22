@@ -997,6 +997,11 @@ async function boot() {
   indexSpec();
   state.pages = buildPages(state.spec);
 
+  for (const q of allQuestions(state.spec)) {
+    if (q.default !== undefined && isEmpty(state.answers[q.id])) state.answers[q.id] = q.default;
+    if (q.type === 'rank' && isEmpty(state.answers[q.id])) state.answers[q.id] = q.options.map((o) => o.value);
+  }
+
   localRestore();
   try {
     const res = await fetch(base + '/api/progress');

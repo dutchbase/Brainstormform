@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { normalizeSpec, normalizeFragment, SpecError } from '../src/schema.mjs';
+import { normalizeSpec, normalizeFragment, SpecError, seedDefaults } from '../src/schema.mjs';
 import { startServer } from '../src/server.mjs';
 import { handle as mcpHandle } from '../src/mcp.mjs';
 import { createSession, waitForAnswers, stopSession, sessionDir, exportSession, assertSafeDest } from '../src/session.mjs';
@@ -325,4 +325,12 @@ test('rank needs at least two options', () => {
   assert.throws(() => normalizeSpec({ questions: [{ type: 'rank', label: 'r', options: ['only'] }] }), SpecError);
   const spec = normalizeSpec({ questions: [{ id: 'r', type: 'rank', label: 'Order', options: ['a', 'b', 'c'] }] });
   assert.deepEqual(spec.categories[0].questions[0].options.map((o) => o.value), ['a', 'b', 'c']);
+});
+
+test('seedDefaults copies matching answers into question defaults', () => {
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }, { id: 'b', type: 'multi', label: 'B', options: ['web', 'ios'] }] });
+  const seeded = seedDefaults(spec, { a: { type: 'text', value: 'ship v1' }, b: { type: 'multi', value: ['web'] } });
+  assert.equal(seeded.categories[0].questions[0].default, 'ship v1');
+  assert.deepEqual(seeded.categories[0].questions[1].default, ['web']);
+  assert.equal(spec.categories[0].questions[0].default, undefined, 'original not mutated');
 });

@@ -21,6 +21,7 @@ import {
   sessionDir,
   readJson,
   resolveOutDir,
+  seedSession,
 } from './session.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +97,14 @@ async function cmdAsk(args) {
   } catch (err) {
     if (err instanceof SpecError || err instanceof SyntaxError) return fail('invalid spec: ' + err.message);
     throw err;
+  }
+
+  if (args.from) {
+    try {
+      spec = await seedSession(String(args.from), spec);
+    } catch (err) {
+      return fail(err.message);
+    }
   }
 
   const options = {
@@ -370,7 +379,7 @@ function helpText() {
 
 Usage:
   brainstormform ask [questions.json|-] [--open|--no-open] [--keep]
-                     [--out [dir]] [--commit] [--archive] [--force]
+                     [--out [dir]] [--commit] [--archive] [--force] [--from <id>]
                      [--on-submit "cmd"] [--idle-timeout s] [--max-upload MB]
   brainstormform progress <id>                 # current draft answers + status
   brainstormform add <id> <fragment.json|->    # append questions to a live form
