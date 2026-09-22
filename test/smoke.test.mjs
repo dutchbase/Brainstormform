@@ -455,6 +455,14 @@ test('progress writes a revision and changed ids', async () => {
   }
 });
 
+test('explanation is canonical and content is an alias', () => {
+  const a = normalizeSpec({ questions: [{ id: 'q', type: 'text', label: 'Q', explanation: 'Because **why**.' }] });
+  assert.equal(a.categories[0].questions[0].explanation, 'Because **why**.');
+  assert.equal(a.categories[0].questions[0].content, undefined);
+  const b = normalizeSpec({ questions: [{ id: 'q', type: 'text', label: 'Q', content: 'Old field.' }] });
+  assert.equal(b.categories[0].questions[0].explanation, 'Old field.');
+});
+
 test('matrix requires rows and columns and normalizes shorthand', () => {
   assert.throws(() => normalizeSpec({ questions: [{ type: 'matrix', label: 'm', rows: ['a'] }] }), SpecError);
   const spec = normalizeSpec({

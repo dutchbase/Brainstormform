@@ -107,7 +107,8 @@ function normalizeQuestion(input, where, state) {
   }
   const intro = input.intro !== undefined ? input.intro : input.help;
   if (intro != null) q.intro = String(intro);
-  if (input.content != null) q.content = String(input.content);
+  const explanation = input.explanation !== undefined ? input.explanation : input.content;
+  if (explanation != null) q.explanation = String(explanation);
   if (input.placeholder != null) q.placeholder = String(input.placeholder);
   if (input.default !== undefined) q.default = input.default;
 
@@ -321,7 +322,8 @@ export const SPEC_SCHEMA = {
         type: { enum: QUESTION_TYPES },
         label: { type: 'string' },
         intro: { type: 'string', description: 'Markdown help text' },
-        content: { type: 'string', description: 'Markdown block rendered under the heading' },
+        explanation: { type: 'string', description: 'Markdown context shown with the question; supports links and images' },
+        content: { type: 'string', description: 'Alias for explanation' },
         required: { type: 'boolean', default: false },
         placeholder: { type: 'string' },
         default: {},
@@ -479,7 +481,8 @@ questions: [...] }] or a flat questions: [...].
 Question:
 - type: one of ${QUESTION_TYPES.join(', ')}
 - label (required), id (auto q1..qN), required?
-- intro (Markdown, short help), content (Markdown block)
+- intro (Markdown, short help), explanation (Markdown context block with links
+  and images, e.g. ![diagram](https://…/d.png) or a local file under the ask dir)
 - showIf: { question, equals | not | in | contains | answered } to show conditionally
 - then: { question, equals | not | in | contains | answered, add: [...] } appends
   follow-up questions to the live form the moment the condition first matches
