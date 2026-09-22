@@ -210,6 +210,8 @@ export function normalizeSpec(input) {
     theme: rawSettings.theme === 'light' || rawSettings.theme === 'dark' ? rawSettings.theme : 'auto',
     submitLabel: rawSettings.submitLabel != null ? String(rawSettings.submitLabel) : 'Continue',
     finishLabel: rawSettings.finishLabel != null ? String(rawSettings.finishLabel) : 'Finish',
+    scaleStyle: rawSettings.scaleStyle === 'slider' ? 'slider' : 'buttons',
+    autoAdvance: rawSettings.autoAdvance === true,
   };
 
   const state = { seen: new Set(), count: 0, categoryCount: 0 };
@@ -290,6 +292,8 @@ export const SPEC_SCHEMA = {
         theme: { enum: ['auto', 'light', 'dark'], default: 'auto' },
         submitLabel: { type: 'string' },
         finishLabel: { type: 'string' },
+        scaleStyle: { enum: ['buttons', 'slider'], default: 'buttons' },
+        autoAdvance: { type: 'boolean', default: false },
       },
       additionalProperties: false,
     },

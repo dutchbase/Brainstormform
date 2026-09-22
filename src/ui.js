@@ -10,7 +10,7 @@ const mainEl = $('#main');
 const state = {
   spec: null, revision: 0, status: 'open', pages: [], page: 0, dir: 'fwd',
   byId: {}, previews: {}, answers: {}, other: {}, skipped: {}, notes: {},
-  submitted: false, review: false, startedAt: Date.now(),
+  submitted: false, review: false, startedAt: Date.now(), advanceTimer: null,
 };
 
 const cssEscape = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'));
@@ -112,7 +112,11 @@ function questionHtml(q) {
     }
     const labels = Array.isArray(q.scaleLabels) && q.scaleLabels.length
       ? '<div class="scale-labels"><span>' + escapeHtml(q.scaleLabels[0]) + '</span><span>' + escapeHtml(q.scaleLabels[q.scaleLabels.length - 1]) + '</span></div>' : '';
-    body = '<div class="segs">' + segs + '</div>' + labels;
+    if (state.spec.settings.scaleStyle === 'slider') {
+      body = '<input type="range" class="range" data-range="' + escapeHtml(q.id) + '" min="' + q.min + '" max="' + q.max + '" step="' + q.step + '" value="' + (val == null ? q.min : val) + '" aria-label="' + escapeHtml(q.label) + '">' + labels;
+    } else {
+      body = '<div class="segs">' + segs + '</div>' + labels;
+    }
   } else if (q.type === 'boolean') {
     body = '<div class="segs">' +
       '<button type="button" class="seg' + (val === true ? ' sel' : '') + '" data-seg="' + escapeHtml(q.id) + '" data-value="true">Yes</button>' +
@@ -566,6 +570,13 @@ function applyAnswerFromChange(host, t) {
 function onChoiceChange(before) {
   scheduleSave(true);
   if (visibleKey() !== before) render(false);
+  maybeAdvance();
+}
+
+function maybeAdvance() {
+  if (!state.spec.settings.autoAdvance) return;
+  clearTimeout(state.advanceTimer);
+  state.advanceTimer = setTimeout(() => { if (!state.review && !state.submitted) next(); }, 350);
 }
 
 mainEl.addEventListener('change', (e) => {
@@ -590,6 +601,13 @@ mainEl.addEventListener('change', (e) => {
 
 mainEl.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.dataset && t.dataset.range !== undefined) {
+    const id = t.dataset.range;
+    state.answers[id] = Number(t.value);
+    delete state.skipped[id];
+    scheduleSave();
+    return;
+  }
   if (t.dataset && t.dataset.other !== undefined) {
     state.other[t.dataset.other] = t.value;
     showError(t.dataset.other, null);
