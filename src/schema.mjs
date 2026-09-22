@@ -584,12 +584,20 @@ export const PROFILE_QUESTION_IDS = ['name', 'role', 'experience', 'background',
 
 export function profileFromAnswers(record, { now } = {}) {
   const answers = (record && record.answers) || {};
+  const notes = (record && record.notes) || {};
   const picked = {};
   for (const id of PROFILE_QUESTION_IDS) {
     const entry = answers[id];
     if (entry === undefined) continue;
     picked[id] = entry && typeof entry === 'object' && !Array.isArray(entry) && 'type' in entry ? entry.value : entry;
   }
+  const extra = [];
+  for (const id of PROFILE_QUESTION_IDS) {
+    if (id === 'notes') continue;
+    const text = notes[id] == null ? '' : String(notes[id]).trim();
+    if (text) extra.push(`${id}: ${text}`);
+  }
+  if (extra.length) picked.notes = [picked.notes, extra.join('\n')].filter(Boolean).join('\n');
   return normalizeProfile(picked, { now });
 }
 

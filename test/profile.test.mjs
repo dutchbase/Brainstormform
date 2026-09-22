@@ -47,6 +47,16 @@ test('profileFromAnswers maps rendered answers into a profile', () => {
   assert.equal(p.examples, false);
 });
 
+test('profileFromAnswers folds per-question notes into notes', () => {
+  const p = profileFromAnswers({
+    answers: { experience: { type: 'single', value: 'new' }, notes: { type: 'textarea', value: 'keep it short' } },
+    notes: { experience: 'cannot code, 2 years vibecoding', examples: 'only when relevant' },
+  });
+  assert.match(p.notes, /keep it short/);
+  assert.match(p.notes, /experience: cannot code/);
+  assert.match(p.notes, /examples: only when relevant/);
+});
+
 test('the profile preset covers every profile question id', async () => {
   const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'presets', 'profile.json');
   const spec = normalizeSpec(JSON.parse(await fsp.readFile(file, 'utf8')));
