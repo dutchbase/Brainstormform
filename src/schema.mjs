@@ -525,6 +525,74 @@ export function exampleSpec() {
   return JSON.parse(JSON.stringify(EXAMPLE));
 }
 
+export const EXPERIENCE_LEVELS = ['new', 'learning', 'professional', 'senior', 'expert'];
+export const LANGUAGE_LEVELS = ['plain', 'standard', 'technical'];
+export const DETAIL_LEVELS = ['brief', 'normal', 'detailed'];
+
+const PROFILE_TEXT_FIELDS = ['name', 'role', 'background', 'language', 'notes'];
+
+export function normalizeProfile(input, { now = new Date() } = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SpecError('Profile must be a JSON object.');
+  }
+  const out = { version: 1 };
+  for (const field of PROFILE_TEXT_FIELDS) {
+    if (input[field] == null) continue;
+    const text = String(input[field]).trim();
+    if (text) out[field] = text;
+  }
+  const pick = (field, allowed) => {
+    if (input[field] == null || input[field] === '') return;
+    const value = String(input[field]);
+    if (!allowed.includes(value)) throw new SpecError(`Profile.${field} "${value}" is invalid. Allowed: ${allowed.join(', ')}.`);
+    out[field] = value;
+  };
+  pick('experience', EXPERIENCE_LEVELS);
+  pick('languageLevel', LANGUAGE_LEVELS);
+  pick('detail', DETAIL_LEVELS);
+  if (input.examples !== undefined) {
+    if (typeof input.examples !== 'boolean') throw new SpecError('Profile.examples must be a boolean.');
+    out.examples = input.examples;
+  }
+  out.updatedAt = typeof input.updatedAt === 'string' && input.updatedAt ? input.updatedAt : now.toISOString();
+  return out;
+}
+
+export function profileSummary(profile) {
+  if (!profile) return { configured: false };
+  const parts = [];
+  if (profile.experience) parts.push(`Experience: ${profile.experience}.`);
+  if (profile.languageLevel) parts.push(`Use ${profile.languageLevel} language.`);
+  if (profile.detail) parts.push(`Detail: ${profile.detail}.`);
+  if (profile.examples) parts.push('Include examples.');
+  if (profile.language) parts.push(`Language: ${profile.language}.`);
+  if (profile.background) parts.push(`Background: ${profile.background}`);
+  return {
+    configured: true,
+    name: profile.name,
+    role: profile.role,
+    experience: profile.experience,
+    language: profile.language,
+    languageLevel: profile.languageLevel,
+    detail: profile.detail,
+    examples: profile.examples,
+    summary: parts.join(' ').trim(),
+  };
+}
+
+export const PROFILE_QUESTION_IDS = ['name', 'role', 'experience', 'background', 'language', 'languageLevel', 'detail', 'examples', 'notes'];
+
+export function profileFromAnswers(record, { now } = {}) {
+  const answers = (record && record.answers) || {};
+  const picked = {};
+  for (const id of PROFILE_QUESTION_IDS) {
+    const entry = answers[id];
+    if (entry === undefined) continue;
+    picked[id] = entry && typeof entry === 'object' && !Array.isArray(entry) && 'type' in entry ? entry.value : entry;
+  }
+  return normalizeProfile(picked, { now });
+}
+
 export function seedDefaults(spec, answers) {
   const byId = new Map();
   for (const [id, entry] of Object.entries(answers || {})) {
