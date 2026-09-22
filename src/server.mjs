@@ -484,8 +484,6 @@ export async function startServer({
         unanswered: Array.isArray(payload && payload.unanswered) ? payload.unanswered : [],
         hidden: Array.isArray(payload && payload.hidden) ? payload.hidden : [],
       };
-      await writeJsonAtomic(answersPath, record);
-      status = 'submitted';
       if (saveProfile) {
         try {
           await writeProfile(profileFromAnswers(record));
@@ -493,12 +491,18 @@ export async function startServer({
           /* a malformed profile form must not fail the submission */
         }
       }
-      await runThenRules(rawAnswers(record.answers));
-      await syncMeta({ submittedAt: record.submittedAt });
-      broadcast('state', { revision, status });
-      if (onSubmitted) onSubmitted(record);
-      runHook();
+      await writeJsonAtomic(answersPath, record);
+      status = 'submitted';
       sendJson(res, 200, { ok: true });
+      try {
+        await runThenRules(rawAnswers(record.answers));
+        await syncMeta({ submittedAt: record.submittedAt });
+        broadcast('state', { revision, status });
+        if (onSubmitted) onSubmitted(record);
+        runHook();
+      } catch {
+        /* post-response work must not affect the already-sent submission */
+      }
       return;
     }
 
@@ -593,12 +597,16 @@ async function runDaemon() {
     if (closing) return;
     closing = true;
     clearTimeout(timer);
-    close().finally(async () => {
-      if (!meta.keep && !meta.out && !meta.archive) {
-        await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
-      }
-      process.exit(0);
-    });
+    // Give an in-flight submit response a moment to flush before closeAllConnections
+    // tears the socket down: `wait` resolves on answers.json and may stop us right away.
+    setTimeout(() => {
+      close().finally(async () => {
+        if (!meta.keep && !meta.out && !meta.archive) {
+          await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+        }
+        process.exit(0);
+      });
+    }, 200);
   }
 
   process.on('SIGTERM', shutdown);

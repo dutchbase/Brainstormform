@@ -367,6 +367,50 @@ test('createSession records saveProfile in meta', async () => {
   }
 });
 
+test('submit responds 200 before post-response work that throws', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-submit-ok-'));
+  const spec = normalizeSpec({ questions: [{ id: 'a', type: 'text', label: 'A' }] });
+  const token = 'okok'.repeat(6);
+  const srv = await startServer({ sessionDir: dir, spec, token, onSubmitted: () => { throw new Error('boom'); } });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    const res = await fetch(`${base}/api/submit`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: { a: { type: 'text', value: 'x' } }, skipped: [], unanswered: [], hidden: [] }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).ok, true);
+    const record = JSON.parse(await fsp.readFile(path.join(dir, 'answers.json'), 'utf8'));
+    assert.equal(record.answers.a.value, 'x');
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a bad profile form still submits and does not write a profile', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-badprof-'));
+  const prev = process.env.XDG_CONFIG_HOME;
+  const cfg = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-badprof-cfg-'));
+  process.env.XDG_CONFIG_HOME = cfg;
+  const spec = normalizeSpec({ questions: [{ id: 'experience', type: 'single', label: 'E', options: ['new', 'learning'] }] });
+  const srv = await startServer({ sessionDir: dir, spec, token: 'badbad'.repeat(5), saveProfile: true });
+  const base = `http://127.0.0.1:${srv.port}/s/${'badbad'.repeat(5)}`;
+  try {
+    const res = await fetch(`${base}/api/submit`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ answers: { experience: { type: 'single', value: 'wizard' } }, skipped: [], unanswered: [], hidden: [] }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(await readProfile(), null);
+  } finally {
+    process.env.XDG_CONFIG_HOME = prev;
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.rm(cfg, { recursive: true, force: true });
+  }
+});
+
 test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-export-'));
   const dest = path.join(dir, 'cwd');
