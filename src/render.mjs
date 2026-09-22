@@ -120,3 +120,67 @@ export function evaluateShowIf(showIf, answers) {
 export function isVisible(question, answers) {
   return evaluateShowIf(question && question.showIf, answers);
 }
+
+export function allQuestions(spec) {
+  return spec.categories.flatMap((category) => category.questions);
+}
+
+function unwrap(entry) {
+  return entry && typeof entry === 'object' && !Array.isArray(entry) && 'type' in entry && 'value' in entry
+    ? entry.value
+    : entry;
+}
+
+export function compactAnswers(record) {
+  const source = record || {};
+  const answers = {};
+  for (const [id, entry] of Object.entries(source.answers || {})) {
+    const value = unwrap(entry);
+    if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
+    answers[id] = value;
+  }
+  for (const [id, text] of Object.entries(source.other || {})) {
+    if (!String(text || '').trim()) continue;
+    answers[id] = answers[id] === undefined ? text : String(answers[id]) + ' — ' + text;
+  }
+  const out = { answers };
+  const notes = source.notes && Object.keys(source.notes).length ? source.notes : undefined;
+  if (notes) out.notes = notes;
+  return out;
+}
+
+function renderValue(value) {
+  if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return '_skipped_';
+  if (Array.isArray(value)) return '- ' + value.join('\n- ');
+  if (typeof value === 'object') return Object.entries(value).map(([k, v]) => '- ' + k + ': ' + v).join('\n');
+  return String(value);
+}
+
+export function summaryMarkdown(spec, record) {
+  const source = record || {};
+  const answers = source.answers || {};
+  const notes = source.notes || {};
+  const lines = ['# ' + (spec.title || 'Brainstorm'), '', '_Submitted ' + new Date().toLocaleString() + '_', ''];
+  for (const category of spec.categories) {
+    const visible = category.questions.filter((q) => {
+      const value = unwrap(answers[q.id]);
+      const hidden = source.hidden && source.hidden.includes(q.id);
+      return !hidden && (value !== undefined || notes[q.id]);
+    });
+    if (!visible.length) continue;
+    lines.push('## ' + category.title, '');
+    for (const q of visible) {
+      lines.push('**' + (q.label || q.id) + '**');
+      lines.push(renderValue(unwrap(answers[q.id])));
+      if (notes[q.id]) lines.push('_Note: ' + notes[q.id] + '_');
+      lines.push('');
+    }
+  }
+  return lines.join('\n');
+}
+
+export function formatAnswers(spec, record, format = 'full') {
+  if (format === 'md' || format === 'markdown') return summaryMarkdown(spec, record);
+  if (format === 'json' || format === 'compact') return compactAnswers(record);
+  return record;
+}

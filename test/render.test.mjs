@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml } from '../src/render.mjs';
+import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml, allQuestions, compactAnswers, summaryMarkdown, formatAnswers } from '../src/render.mjs';
 
 test('escapeHtml neutralises tags', () => {
   assert.equal(escapeHtml('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
@@ -34,4 +34,54 @@ test('evaluateShowIf covers the operators', () => {
   assert.equal(evaluateShowIf({ question: 'b', op: 'in', value: ['android'] }, answers), false);
   assert.equal(evaluateShowIf({ question: 'd', op: 'answered', value: false }, answers), true);
   assert.equal(evaluateShowIf(undefined, answers), true);
+});
+
+const SPEC = {
+  title: 'T',
+  categories: [
+    {
+      title: 'Scope',
+      questions: [
+        { id: 'a', type: 'text', label: 'Goal' },
+        { id: 'b', type: 'multi', label: 'Platforms' },
+      ],
+    },
+  ],
+};
+
+test('allQuestions flattens categories', () => {
+  assert.deepEqual(allQuestions(SPEC).map((q) => q.id), ['a', 'b']);
+});
+
+test('compactAnswers drops type wrappers, empties and always-empty arrays', () => {
+  const out = compactAnswers({
+    answers: { a: { type: 'text', value: 'ship v1' }, b: { type: 'multi', value: [] }, c: { type: 'text', value: '' } },
+    other: { b: 'desktop' },
+    notes: { a: 'soon' },
+  });
+  assert.deepEqual(out, { answers: { a: 'ship v1', b: 'desktop' }, notes: { a: 'soon' } });
+});
+
+test('compactAnswers passes through raw progress values', () => {
+  assert.deepEqual(compactAnswers({ answers: { a: 'draft', b: ['x'] }, other: {}, notes: {} }), {
+    answers: { a: 'draft', b: ['x'] },
+  });
+});
+
+test('summaryMarkdown renders categories, values and notes', () => {
+  const md = summaryMarkdown(SPEC, {
+    answers: { a: { type: 'text', value: 'ship v1' }, b: { type: 'multi', value: ['web', 'ios'] } },
+    notes: { a: 'but small' },
+  });
+  assert.match(md, /## Scope/);
+  assert.match(md, /\*\*Goal\*\*\nship v1/);
+  assert.match(md, /_Note: but small_/);
+  assert.match(md, /- web/);
+});
+
+test('formatAnswers selects the shape', () => {
+  const rec = { answers: { a: 1 }, other: {}, notes: {} };
+  assert.equal(formatAnswers(SPEC, rec, 'full'), rec);
+  assert.deepEqual(formatAnswers(SPEC, rec, 'json'), { answers: { a: 1 } });
+  assert.match(formatAnswers(SPEC, rec, 'md'), /# T/);
 });
