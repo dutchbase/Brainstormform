@@ -196,8 +196,11 @@ function refreshQuestion(id) {
 function updateFooter() {
   if (state.review || state.submitted) return;
   $('#prev').hidden = false;
+  $('#skipSection').hidden = false;
   $('#next').hidden = false;
   $('#pager').hidden = false;
+  const page = state.pages[state.page];
+  $('#sectionLabel').textContent = page ? page.cat.title : '';
   $('#prev').textContent = '← Back';
   const nextIdx = nextPage();
   $('#prev').disabled = prevPage() < 0;
@@ -349,6 +352,7 @@ function renderReview() {
   foot.hidden = false;
   $('#prev').hidden = false;
   $('#next').hidden = true;
+  $('#skipSection').hidden = true;
   $('#pager').hidden = true;
   $('#prev').textContent = '← Keep editing';
   $('#finish').textContent = 'Confirm & send';
@@ -712,6 +716,20 @@ $('#prev').addEventListener('click', () => { if (state.review) { editAnswers(); 
 $('#next').addEventListener('click', next);
 $('#finish').addEventListener('click', () => { if (state.review) { submit(); return; } finish(); });
 $('#theme').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+$('#skipSection').addEventListener('click', () => {
+  if (state.review || state.submitted) return;
+  for (const q of visibleOnPage(state.page)) {
+    if (q.required) continue;
+    state.skipped[q.id] = true;
+    state.answers[q.id] = undefined;
+  }
+  scheduleSave(true);
+  const idx = nextPage();
+  if (idx < 0) { render(); return; }
+  state.page = idx; state.dir = 'fwd'; render();
+});
+$('#helpClose').addEventListener('click', () => { $('#help').hidden = true; });
+function toggleHelp() { $('#help').hidden = !$('#help').hidden; }
 
 function activeChoiceQuestion() {
   const focused = document.activeElement && document.activeElement.closest('[data-qid]');
@@ -723,6 +741,8 @@ document.addEventListener('keydown', (e) => {
   if (state.submitted) return;
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (e.key === '?') { e.preventDefault(); toggleHelp(); return; }
+  if (e.key === 'Escape') { $('#help').hidden = true; return; }
   if (/^[1-9]$/.test(e.key)) {
     const q = activeChoiceQuestion();
     if (!q) return;
