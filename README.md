@@ -117,10 +117,10 @@ when you answer.
 The skill installed by `setup` teaches the agent to choose between Brainstormform
 and its built-in question tool: small and static goes to the built-in tool, while
 more than a few questions, sections, uploads or live follow-ups come here. It
-also nudges the agent to use the superpowers **brainstorming** skill as the front
-end for creative work; a copy is bundled in `skills/brainstorming/` and installed
-by the same command when you don't already have one. To install them on their
-own:
+also advises the agent to use the superpowers **brainstorming** skill as a front
+end for creative work — recommended, not required. A copy is bundled in
+`skills/brainstorming/` and installed by the same command when you don't already
+have one. To install them on their own:
 
 ```bash
 brainstormform install-skill

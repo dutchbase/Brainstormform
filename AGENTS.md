@@ -24,13 +24,13 @@ The same rule is shipped as a skill in `skills/brainstormform/SKILL.md`.
 
 ## Brainstorming skill
 
-For creative work, the superpowers `brainstorming` skill is the front end that
+For creative work, the superpowers `brainstorming` skill is a good front end that
 draws out intent, requirements and design; Brainstormform is the question
-surface. Agents that have superpowers installed should use it directly. For
-agents that do not, a copy is bundled at `skills/brainstorming/` (vendored under
-MIT, see `skills/brainstorming/NOTICE`), and `brainstormform install-skill`
-installs it alongside the Brainstormform skill, skipping it when a copy is
-already present.
+surface. Using it is recommended, not required. Agents that have superpowers
+installed can use it directly. For agents that do not, a copy is bundled at
+`skills/brainstorming/` (vendored under MIT, see `skills/brainstorming/NOTICE`),
+and `brainstormform install-skill` installs it alongside the Brainstormform
+skill, skipping it when a copy is already present.
 
 ## Using it
 

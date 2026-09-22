@@ -14,8 +14,9 @@ All notable changes to Brainstormform are documented here. The format is based o
   skill (MIT, see `skills/brainstorming/NOTICE`) ships in the repo and is
   installed by `install-skill`/`setup` when no copy is present, so agents
   without superpowers can still elicit intent and requirements before building.
-  The Brainstormform skill tells agents to pair the two: brainstorming as the
-  front end, Brainstormform as the question surface.
+  It is advice, not an obligation: the trigger wording is softened to a
+  recommendation, and the Brainstormform skill suggests pairing the two —
+  brainstorming as the front end, Brainstormform as the question surface.
 - **Opt-in compact and Markdown answers.** `wait`, `get`, `progress` and `export`
   accept `--format json` (a compact `{ answers: { id: value }, notes? }` map) or
   `--format md` (a Markdown summary). The MCP `read_answers` /

@@ -4,6 +4,10 @@ still use it.
 
 Upstream: https://github.com/obra/superpowers (skills/brainstorming)
 
+Local change: the trigger wording was softened from a mandate ("You MUST use
+this") to a recommendation, so agents are advised to use it but are not
+obligated to. Everything else is upstream content.
+
 If your agent already provides the superpowers brainstorming skill, prefer that
 copy — it may be newer. Brainstormform's installer only copies this one when no
 `brainstorming/SKILL.md` is present.
