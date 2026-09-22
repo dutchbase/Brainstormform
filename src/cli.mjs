@@ -22,6 +22,7 @@ import {
   readJson,
   resolveOutDir,
   seedSession,
+  isAlive,
 } from './session.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -273,6 +274,19 @@ async function cmdStop(args) {
   return 0;
 }
 
+async function cmdResume(args) {
+  const id = args._[0];
+  if (!id) return fail('usage: brainstormform resume <sessionId> [--no-open]');
+  const meta = await readJson(path.join(sessionDir(id), 'meta.json'), null);
+  if (!meta) return fail('unknown session "' + id + '".', 1);
+  if (meta.status === 'submitted') return fail('session "' + id + '" is already submitted.', 4);
+  if (meta.pid && isAlive(meta.pid)) return fail('session "' + id + '" is already running at ' + meta.url, 4);
+  const idleTimeout = args['idle-timeout'] !== undefined ? Number(args['idle-timeout']) : undefined;
+  const reopened = await startDetachedServer(id, { open: args['no-open'] !== true, idleTimeout });
+  print({ sessionId: id, url: reopened.url, pid: reopened.pid });
+  return 0;
+}
+
 async function cmdCleanup() {
   const removed = await cleanupStale();
   print({ removed });
@@ -391,7 +405,7 @@ Usage:
   brainstormform doctor [--json]
   brainstormform update [--check]
   brainstormform install-skill [--target agents|opencode|claude|all]
-  brainstormform list | stop <id> | cleanup
+  brainstormform list | stop <id> | resume <id> | cleanup
   brainstormform schema | guide | mcp | version
 
 ask prints {"sessionId","url","pid"}. Answers are saved to the server as the user
@@ -433,6 +447,8 @@ export async function main(argv) {
       return cmdList();
     case 'stop':
       return cmdStop(args);
+    case 'resume':
+      return cmdResume(args);
     case 'cleanup':
       return cmdCleanup();
     case 'schema':
