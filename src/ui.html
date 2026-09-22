@@ -103,6 +103,10 @@
   .mx td{border-top:1px solid var(--border);text-align:center;padding:6px 8px}
   .mx-cell{display:inline-flex;padding:6px}
   .mx input{accent-color:var(--accent);width:18px;height:18px}
+  .rank{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+  .rank-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2)}
+  .rank-n{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
+  .rank-l{flex:1}
   .drop{margin-top:12px; border:1.5px dashed var(--border-strong); border-radius:var(--radius-sm); padding:20px; text-align:center; color:var(--muted); cursor:pointer; background:var(--panel-2); transition:border-color .15s, background .15s, transform .1s}
   .drop:hover,.drop.over{border-color:var(--accent); background:var(--accent-soft); color:var(--text)}
   .files{display:grid; gap:8px; margin-top:10px}
@@ -331,6 +335,14 @@ function questionHtml(q) {
           '" data-matrix="' + escapeHtml(q.id) + '" data-row="' + escapeHtml(r.value) + '" value="' + escapeHtml(c.value) + '"' +
           (chosen[r.value] === c.value ? ' checked' : '') + '></label></td>').join('') + '</tr>').join('') +
       '</tbody></table></div>';
+  } else if (q.type === 'rank') {
+    const order = Array.isArray(val) && val.length ? val : q.options.map((o) => o.value);
+    body = '<ol class="rank">' + order.map((v, i) => {
+      const o = q.options.find((x) => x.value === v) || { label: v };
+      return '<li class="rank-item"><span class="rank-n">' + (i + 1) + '</span><span class="rank-l">' + escapeHtml(o.label) + '</span>' +
+        '<button type="button" class="rm" data-rank="' + escapeHtml(q.id) + '" data-move="up" data-i="' + i + '" aria-label="Move up">↑</button>' +
+        '<button type="button" class="rm" data-rank="' + escapeHtml(q.id) + '" data-move="down" data-i="' + i + '" aria-label="Move down">↓</button></li>';
+    }).join('') + '</ol>';
   } else if (q.type === 'file') {
     const files = Array.isArray(val) ? val : [];
     const chips = files.map((f, i) => {
@@ -494,6 +506,7 @@ function buildOutput() {
     else if (q.type === 'boolean') out[q.id] = { type: 'boolean', value: !!v };
     else if (q.type === 'file') out[q.id] = { type: 'file', value: v };
     else if (q.type === 'matrix') { if (v && typeof v === 'object' && Object.keys(v).length) out[q.id] = { type: 'matrix', value: v }; }
+    else if (q.type === 'rank') out[q.id] = { type: 'rank', value: v };
     else out[q.id] = { type: q.type, value: v };
   }
   return out;
@@ -840,6 +853,20 @@ mainEl.addEventListener('click', (e) => {
       state.other[id] = '';
     }
     scheduleSave(true); refreshQuestion(id); return;
+  }
+  const rankBtn = t.closest('[data-rank]');
+  if (rankBtn) {
+    const id = rankBtn.dataset.rank;
+    const q = state.byId[id];
+    const order = (Array.isArray(state.answers[id]) && state.answers[id].length ? state.answers[id] : q.options.map((o) => o.value)).slice();
+    const i = Number(rankBtn.dataset.i);
+    const j = rankBtn.dataset.move === 'up' ? i - 1 : i + 1;
+    if (j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    state.answers[id] = order;
+    delete state.skipped[id];
+    scheduleSave(true); refreshQuestion(id);
+    return;
   }
   const seg = t.closest('[data-seg]');
   if (seg) {
