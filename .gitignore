@@ -5,3 +5,9 @@ brainstormform-*/
 *.tmp
 .DS_Store
 PROMOTION.md
+
+# The personal user profile lives outside this repo, at
+# ~/.config/brainstormform/profile.json, and must never be committed. The
+# bundled onboarding question bank presets/profile.json IS tracked.
+/profile.json
+brainstormform-profile.json
