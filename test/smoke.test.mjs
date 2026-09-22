@@ -7,7 +7,7 @@ import fsp from 'node:fs/promises';
 import { normalizeSpec, normalizeFragment, SpecError, seedDefaults } from '../src/schema.mjs';
 import { startServer } from '../src/server.mjs';
 import { handle as mcpHandle } from '../src/mcp.mjs';
-import { createSession, waitForAnswers, stopSession, sessionDir, exportSession, assertSafeDest } from '../src/session.mjs';
+import { createSession, waitForAnswers, stopSession, sessionDir, exportSession, assertSafeDest, profilePath, readProfile, writeProfile, clearProfile } from '../src/session.mjs';
 
 test('normalizeSpec wraps flat questions and applies defaults', () => {
   const spec = normalizeSpec({ title: 'Hi', questions: [{ id: 'a', type: 'text', label: 'A' }] });
@@ -280,6 +280,23 @@ test('the bundled brainstorming skill ships with its attribution', async () => {
   await fsp.access(new URL('SKILL.md', dir));
   const notice = await fsp.readFile(new URL('NOTICE', dir), 'utf8');
   assert.match(notice, /MIT License/);
+});
+
+test('profile IO round-trips and clears', async () => {
+  const prev = process.env.XDG_CONFIG_HOME;
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-profile-'));
+  process.env.XDG_CONFIG_HOME = dir;
+  try {
+    assert.equal(await readProfile(), null);
+    assert.ok(profilePath().startsWith(dir));
+    await writeProfile({ version: 1, name: 'Ada', experience: 'learning' });
+    assert.equal((await readProfile()).name, 'Ada');
+    await clearProfile();
+    assert.equal(await readProfile(), null);
+  } finally {
+    process.env.XDG_CONFIG_HOME = prev;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('exportSession refuses to overwrite a non-empty directory unless forced', async () => {

@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { detectAgents, binPaths } from './agents.mjs';
-import { sessionsRoot, stateRoot } from './session.mjs';
+import { sessionsRoot, stateRoot, configRoot } from './session.mjs';
 
 export function permissionsList() {
   const home = os.homedir();
@@ -12,6 +12,7 @@ export function permissionsList() {
   return [
     { path: sessionsRoot(), purpose: 'temporary session data, deleted as soon as the agent reads it' },
     { path: stateRoot(), purpose: 'optional archive of past brainstorms (only with --archive)' },
+    { path: path.join(configRoot(), 'profile.json'), purpose: 'global user profile shared with every agent' },
     { path: path.join(home, '.agents', 'skills', 'brainstormform'), purpose: 'installed agent skill (setup only)' },
     { path: path.join(home, '.claude', 'skills', 'brainstormform'), purpose: 'installed Claude skill (setup only)' },
     { path: path.join(cfg, 'opencode', 'skills', 'brainstormform'), purpose: 'installed opencode skill (setup only)' },

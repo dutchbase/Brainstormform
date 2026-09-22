@@ -24,6 +24,29 @@ export function stateRoot() {
   return path.join(base, 'brainstormform');
 }
 
+export function configRoot() {
+  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(base, 'brainstormform');
+}
+
+export function profilePath() {
+  return path.join(configRoot(), 'profile.json');
+}
+
+export async function readProfile() {
+  return readJson(profilePath(), null);
+}
+
+export async function writeProfile(profile) {
+  await fsp.mkdir(configRoot(), { recursive: true });
+  await writeJsonAtomic(profilePath(), profile);
+  return profile;
+}
+
+export async function clearProfile() {
+  await fsp.rm(profilePath(), { force: true });
+}
+
 export function sessionDir(id) {
   const safe = String(id == null ? '' : id);
   if (!/^bf-[a-z0-9-]+$/i.test(safe)) throw new Error('invalid session id "' + safe + '".');
