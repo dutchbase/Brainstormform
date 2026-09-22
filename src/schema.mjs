@@ -95,6 +95,13 @@ function normalizeQuestion(input, where, state) {
 
   const q = { id, type: input.type, label, required: input.required === true };
   if (input.showIf !== undefined) q.showIf = normalizeShowIf(input.showIf, where, state.seen);
+  if (input.then !== undefined) {
+    const t = input.then;
+    if (!t || typeof t !== 'object' || Array.isArray(t)) throw new SpecError(`${where}.then must be an object.`);
+    if (!Array.isArray(t.add) || t.add.length === 0) throw new SpecError(`${where}.then.add must be a non-empty array of questions.`);
+    const cond = normalizeShowIf(t, `${where}.then`, new Set([...state.seen, id]));
+    q.then = { question: cond.question, op: cond.op, value: cond.value, add: t.add };
+  }
   const intro = input.intro !== undefined ? input.intro : input.help;
   if (intro != null) q.intro = String(intro);
   if (input.content != null) q.content = String(input.content);
@@ -327,6 +334,20 @@ export const SPEC_SCHEMA = {
             answered: { type: 'boolean' },
           },
           required: ['question'],
+        },
+        then: {
+          type: 'object',
+          description: 'Append follow-up questions when an earlier answer matches',
+          properties: {
+            question: { type: 'string' },
+            equals: {},
+            not: {},
+            in: { type: 'array' },
+            contains: {},
+            answered: { type: 'boolean' },
+            add: { type: 'array', items: { $ref: '#/definitions/question' } },
+          },
+          required: ['question', 'add'],
         },
         options: {
           type: 'array',

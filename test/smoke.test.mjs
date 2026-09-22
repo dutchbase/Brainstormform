@@ -334,3 +334,23 @@ test('seedDefaults copies matching answers into question defaults', () => {
   assert.deepEqual(seeded.categories[0].questions[1].default, ['web']);
   assert.equal(spec.categories[0].questions[0].default, undefined, 'original not mutated');
 });
+
+test('a question then: rule appends follow-ups when its condition matches', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-then-'));
+  const spec = normalizeSpec({
+    questions: [
+      { id: 'pets', type: 'boolean', label: 'Pets?', then: { question: 'pets', equals: true, add: [{ id: 'petnames', type: 'text', label: 'Names' }] } },
+    ],
+  });
+  const token = 'then'.repeat(6);
+  const srv = await startServer({ sessionDir: dir, spec, token });
+  const base = `http://127.0.0.1:${srv.port}/s/${token}`;
+  try {
+    await fetch(`${base}/api/progress`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ answers: { pets: true } }) });
+    const onDisk = JSON.parse(await fsp.readFile(path.join(dir, 'questions.json'), 'utf8'));
+    assert.ok(onDisk.categories.flatMap((c) => c.questions).some((q) => q.id === 'petnames'));
+  } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});

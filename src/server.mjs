@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 import { readJson, writeJsonAtomic, sessionDir, openBrowser } from './session.mjs';
 import { appendFragment, allQuestions, SpecError } from './schema.mjs';
+import { evaluateShowIf } from './render.mjs';
 import { parseArgs } from './args.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,6 +137,33 @@ export async function startServer({
       questionCount: allQuestions(spec).length,
       ...extra,
     });
+  }
+
+  function rawAnswers(answers) {
+    const out = {};
+    for (const [key, value] of Object.entries(answers || {})) {
+      out[key] = value && typeof value === 'object' && !Array.isArray(value) && 'type' in value ? value.value : value;
+    }
+    return out;
+  }
+
+  async function runThenRules(answers) {
+    const rules = allQuestions(spec).filter((q) => q.then);
+    for (const q of rules) {
+      if (q.then.fired) continue;
+      if (!evaluateShowIf({ question: q.then.question, op: q.then.op, value: q.then.value }, answers)) continue;
+      q.then.fired = true;
+      try {
+        spec = appendFragment(spec, q.then.add);
+        revision += 1;
+        built = buildAssets(spec, token);
+        await writeJsonAtomic(questionsPath, spec);
+        await syncMeta();
+        broadcast('appended', { revision, status, spec: clientSpec() });
+      } catch {
+        /* invalid follow-up: ignore, do not crash the session */
+      }
+    }
   }
 
   async function runHook() {
@@ -299,6 +327,7 @@ export async function startServer({
         changed: [...changed],
         updatedAt: new Date().toISOString(),
       });
+      await runThenRules(nextAnswers);
       sendJson(res, 200, { ok: true, revision, progressRevision, status });
       return;
     }
@@ -402,6 +431,7 @@ export async function startServer({
       };
       await writeJsonAtomic(answersPath, record);
       status = 'submitted';
+      await runThenRules(rawAnswers(record.answers));
       await syncMeta({ submittedAt: record.submittedAt });
       broadcast('state', { revision, status });
       if (onSubmitted) onSubmitted(record);
