@@ -7,6 +7,7 @@ export function escapeHtml(value) {
 }
 
 const SAFE_URL = /^(https?:|mailto:)/i;
+const SAFE_IMAGE_SRC = /^(https?:|data:image\/|\/(?!\/))/i;
 
 export function renderInlineMarkdown(value) {
   let text = escapeHtml(value);
@@ -17,6 +18,14 @@ export function renderInlineMarkdown(value) {
   };
 
   text = text.replace(/`([^`]+)`/g, (_, code) => keep('<code>' + code + '</code>'));
+  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (match, alt, src) => {
+    if (!SAFE_IMAGE_SRC.test(src)) return alt;
+    return keep(
+      '<a class="md-img" href="' + src + '" target="_blank" rel="noopener noreferrer">' +
+        '<img src="' + src + '" alt="' + alt + '" loading="lazy" onerror="this.style.opacity=.15">' +
+        '</a>',
+    );
+  });
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label, url) => {
     if (!SAFE_URL.test(url)) return label;
     return keep('<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');

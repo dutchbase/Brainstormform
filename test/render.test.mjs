@@ -26,6 +26,34 @@ test('renderMarkdown renders headings and lists', () => {
   assert.match(html, /<ul><li>one<\/li><li>two<\/li><\/ul>/);
 });
 
+test('renderInlineMarkdown renders images as links that open in a new tab', () => {
+  const html = renderInlineMarkdown('![diagram](https://example.com/d.png)');
+  assert.match(html, /<a class="md-img" href="https:\/\/example\.com\/d\.png" target="_blank" rel="noopener noreferrer">/);
+  assert.match(html, /<img src="https:\/\/example\.com\/d\.png" alt="diagram" loading="lazy"/);
+});
+
+test('renderInlineMarkdown allows rooted asset images and data images', () => {
+  assert.match(renderInlineMarkdown('![](/s/t/api/asset/0)'), /<img src="\/s\/t\/api\/asset\/0"/);
+  assert.match(renderInlineMarkdown('![x](data:image/png;base64,AAAA)'), /<img src="data:image\/png;base64,AAAA"/);
+});
+
+test('renderInlineMarkdown refuses unsafe image sources, keeping the alt text', () => {
+  assert.doesNotMatch(renderInlineMarkdown('![x](javascript:alert(1))'), /<img/);
+  assert.doesNotMatch(renderInlineMarkdown('![x](//evil.example/x.png)'), /<img/);
+  assert.doesNotMatch(renderInlineMarkdown('![x](relative.png)'), /<img/);
+  assert.match(renderInlineMarkdown('![a broken ref](javascript:alert(1))'), /a broken ref/);
+});
+
+test('an image is not double-parsed as a link', () => {
+  const html = renderInlineMarkdown('![x](https://example.com/x.png)');
+  assert.equal((html.match(/<a /g) || []).length, 1);
+});
+
+test('renderMarkdown keeps an image inline in its paragraph', () => {
+  const html = renderMarkdown('Before\n\n![x](https://example.com/x.png)\n\nAfter');
+  assert.match(html, /<p><a class="md-img"[^>]*><img/);
+});
+
 test('evaluateShowIf covers the operators', () => {
   const answers = { a: 'web', b: ['ios', 'web'], c: true, d: '' };
   assert.equal(evaluateShowIf({ question: 'a', op: 'equals', value: 'web' }, answers), true);
