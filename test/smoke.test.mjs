@@ -59,7 +59,15 @@ test('end-to-end: live progress, append, submit, host guard, assets', async () =
   try {
     const ui = await fetch(base);
     assert.equal(ui.status, 200);
-    assert.match(await ui.text(), /Brainstormform/);
+    const html = await ui.text();
+    assert.match(html, /Brainstormform/);
+    assert.match(html, /data-bf-base=/);
+    assert.match(html, /app\/ui\.js/);
+
+    const uiJs = await fetch(`${base}/app/ui.js`);
+    assert.equal(uiJs.status, 200);
+    assert.match(uiJs.headers.get('content-type'), /javascript/);
+    assert.match(await uiJs.text(), /documentElement\.dataset\.bfBase/);
 
     const questions = await fetch(`${base}/api/questions`);
     const qbody = await questions.json();

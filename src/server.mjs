@@ -13,6 +13,7 @@ import { parseArgs } from './args.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UI_PATH = path.join(__dirname, 'ui.html');
+const UI_JS_PATH = path.join(__dirname, 'ui.js');
 const RENDER_PATH = path.join(__dirname, 'render.mjs');
 const HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const MAX_UPLOADS = 200; // ponytail: per-session cap; raise it if bulk uploads matter
@@ -101,6 +102,7 @@ export async function startServer({
   const metaFile = path.join(dir, 'meta.json');
   await fsp.mkdir(uploadsDir, { recursive: true });
   const uiHtml = await fsp.readFile(UI_PATH, 'utf8');
+  const uiJs = await fsp.readFile(UI_JS_PATH, 'utf8');
   const renderSrc = await fsp.readFile(RENDER_PATH, 'utf8');
 
   let revision = 1;
@@ -210,7 +212,7 @@ export async function startServer({
         'cache-control': 'no-store',
         'x-content-type-options': 'nosniff',
         'content-security-policy':
-          "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob: data: https:; connect-src 'self'; form-action 'none'; base-uri 'none'",
+          "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data: https:; connect-src 'self'; form-action 'none'; base-uri 'none'",
       });
       res.end(uiHtml.replaceAll('__BF_BASE_URL__', `/s/${token}`));
       return;
@@ -222,6 +224,15 @@ export async function startServer({
         'cache-control': 'no-store',
       });
       res.end(renderSrc);
+      return;
+    }
+
+    if (rest[0] === 'app' && rest[1] === 'ui.js' && req.method === 'GET') {
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(uiJs);
       return;
     }
 
