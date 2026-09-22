@@ -732,6 +732,55 @@ $('#skipSection').addEventListener('click', () => {
 $('#helpClose').addEventListener('click', () => { $('#help').hidden = true; });
 function toggleHelp() { $('#help').hidden = !$('#help').hidden; }
 
+const PROFILE_FIELDS = ['name', 'role', 'experience', 'background', 'language', 'languageLevel', 'detail', 'notes'];
+const profileInput = (field) => $('#' + 'p' + field[0].toUpperCase() + field.slice(1));
+
+async function openSettings() {
+  try {
+    const data = await (await fetch(base + '/api/profile')).json();
+    const p = data.profile || {};
+    for (const f of PROFILE_FIELDS) profileInput(f).value = p[f] || '';
+    $('#pExamples').checked = p.examples === true;
+  } catch { /* open blank */ }
+  $('#settingsPanel').hidden = false;
+}
+function closeSettings() { $('#settingsPanel').hidden = true; }
+
+async function saveSettings() {
+  const profile = {};
+  for (const f of PROFILE_FIELDS) {
+    const value = profileInput(f).value.trim();
+    if (value) profile[f] = value;
+  }
+  profile.examples = $('#pExamples').checked;
+  try {
+    const res = await fetch(base + '/api/profile', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { toast(body.error || 'Could not save your profile.'); return; }
+    toast('Profile saved');
+    closeSettings();
+  } catch {
+    toast('Could not save your profile.');
+  }
+}
+
+async function clearSettings() {
+  try {
+    await fetch(base + '/api/profile', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clear: true }) });
+  } catch { /* ignore */ }
+  for (const f of PROFILE_FIELDS) profileInput(f).value = '';
+  $('#pExamples').checked = false;
+  toast('Profile cleared');
+}
+
+$('#settings').addEventListener('click', openSettings);
+$('#settingsClose').addEventListener('click', closeSettings);
+$('#settingsSave').addEventListener('click', saveSettings);
+$('#settingsClear').addEventListener('click', clearSettings);
+
 function activeChoiceQuestion() {
   const focused = document.activeElement && document.activeElement.closest('[data-qid]');
   if (focused) { const q = state.byId[focused.dataset.qid]; if (q && (q.type === 'single' || q.type === 'multi' || q.type === 'visual' || q.type === 'boolean' || q.type === 'scale')) return q; }
@@ -743,7 +792,7 @@ document.addEventListener('keydown', (e) => {
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if (e.key === '?') { e.preventDefault(); toggleHelp(); return; }
-  if (e.key === 'Escape') { $('#help').hidden = true; return; }
+  if (e.key === 'Escape') { $('#help').hidden = true; closeSettings(); return; }
   if (/^[1-9]$/.test(e.key)) {
     const q = activeChoiceQuestion();
     if (!q) return;

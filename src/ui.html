@@ -166,6 +166,13 @@
   .help-card h3{margin:0 0 12px; font-size:17px}
   .help-card ul{margin:0 0 16px; padding-left:18px; color:var(--muted); line-height:1.9}
   kbd{background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:1px 7px; font-size:12.5px; font-family:inherit}
+  .settings-card{max-width:420px; width:100%; max-height:82vh; overflow:auto; display:grid; gap:10px}
+  .settings-card h3{margin:0}
+  .settings-card label{display:grid; gap:4px; font-size:13px; color:var(--muted)}
+  .settings-card .text-input,.settings-card .ta{padding:8px 10px; font-size:14px}
+  .settings-check{display:flex !important; align-items:center; gap:8px}
+  .settings-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:6px}
+  .settings-note{color:var(--muted); font-size:12.5px; margin:0}
   @media print{
     .bar,.foot,.toast,.help,.pager,.icon-btn{display:none !important}
     .q{break-inside:avoid; box-shadow:none; border-color:#ccc}
@@ -193,6 +200,7 @@
       <span class="section-label" id="sectionLabel"></span>
       <span class="save-state" id="saveState"></span>
       <button id="theme" class="icon-btn" type="button" aria-label="Toggle dark mode">☾</button>
+      <button id="settings" class="icon-btn" type="button" aria-label="Your profile">⚙</button>
     </div>
   </div>
   <div class="progress"><i id="progressBar"></i></div>
@@ -219,6 +227,50 @@
     </div>
   </div>
 </footer>
+
+<div id="settingsPanel" class="help" hidden role="dialog" aria-label="Your profile">
+  <div class="help-card settings-card">
+    <h3>About you</h3>
+    <p class="settings-note">Your agent uses this to phrase questions for you. It is stored on this machine and shared across your sessions and agents.</p>
+    <label>Name<input id="pName" class="text-input" type="text"></label>
+    <label>Role<input id="pRole" class="text-input" type="text" placeholder="indie hacker, backend engineer, …"></label>
+    <label>Experience
+      <select id="pExperience" class="text-input">
+        <option value="">—</option>
+        <option value="new">Brand new</option>
+        <option value="learning">Learning</option>
+        <option value="professional">Professional</option>
+        <option value="senior">Senior</option>
+        <option value="expert">Expert</option>
+      </select>
+    </label>
+    <label>Already know<textarea id="pBackground" class="ta" rows="2" placeholder="Languages, frameworks, tools, domains"></textarea></label>
+    <label>Language<input id="pLanguage" class="text-input" type="text" placeholder="English, Nederlands, …"></label>
+    <label>Language level
+      <select id="pLanguageLevel" class="text-input">
+        <option value="">—</option>
+        <option value="plain">Plain and simple</option>
+        <option value="standard">Standard</option>
+        <option value="technical">Technical</option>
+      </select>
+    </label>
+    <label>Detail
+      <select id="pDetail" class="text-input">
+        <option value="">—</option>
+        <option value="brief">Brief</option>
+        <option value="normal">Normal</option>
+        <option value="detailed">Detailed</option>
+      </select>
+    </label>
+    <label class="settings-check"><input id="pExamples" type="checkbox"> Include examples</label>
+    <label>Notes<textarea id="pNotes" class="ta" rows="2" placeholder="e.g. explain acronyms"></textarea></label>
+    <div class="settings-actions">
+      <button id="settingsClear" class="btn ghost" type="button">Clear</button>
+      <button id="settingsClose" class="btn ghost" type="button">Close</button>
+      <button id="settingsSave" class="btn primary" type="button">Save</button>
+    </div>
+  </div>
+</div>
 
 <div id="help" class="help" hidden role="dialog" aria-label="Keyboard shortcuts">
   <div class="help-card">
