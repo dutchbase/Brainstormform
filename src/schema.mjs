@@ -459,25 +459,36 @@ Ask a user unlimited questions through a local web form, live.
 
   brainstormform ask questions.json --open        # start a form, prints {sessionId,url}
   brainstormform progress <id>                    # current draft answers + status
+  brainstormform progress <id> --since 4          # only answers changed since progressRevision 4
   brainstormform add <id> more-questions.json     # append questions to a live form
   brainstormform wait <id> --timeout 600          # block until the user presses Finish
 
+Use --format json|md on wait/get/progress/export for a compact id->value map or
+a Markdown summary. ask --from <id> seeds defaults from a past session; ask
+--preset discovery loads a bundled question bank; resume <id> restarts a session.
+
 MCP tools: ask_questions, read_answers, add_questions, wait_for_answers.
+The full format is also served as the brainstormform://guide resource.
 
 ## Spec format
 
-Top level: title, intro (Markdown), settings { pageSize, theme, submitLabel, finishLabel },
-and either categories: [{ title, intro?, questions: [...] }] or a flat questions: [...].
+Top level: title, intro (Markdown), settings { pageSize, theme, submitLabel,
+finishLabel, scaleStyle, autoAdvance }, and either categories: [{ title, intro?,
+questions: [...] }] or a flat questions: [...].
 
 Question:
 - type: one of ${QUESTION_TYPES.join(', ')}
 - label (required), id (auto q1..qN), required?
 - intro (Markdown, short help), content (Markdown block)
 - showIf: { question, equals | not | in | contains | answered } to show conditionally
+- then: { question, equals | not | in | contains | answered, add: [...] } appends
+  follow-up questions to the live form the moment the condition first matches
 - single/multi: options [{ value, label?, description? }], allowOther?
 - visual: options [{ value, label?, description?, image }] where image is https URL or local path
 - number/scale: min, max, step?, scaleLabels?
 - file: accept?, multiple?, maxFiles?
+- matrix: rows + columns, each [{ value, label? }] or plain strings; answer is { row: column }
+- rank: options [{ value, label? }] (at least two); answer is the ordered value array
 - text/textarea: placeholder?
 
 Every question also accepts a free-text **note** from the user, returned in
@@ -504,6 +515,9 @@ ${JSON.stringify(EXAMPLE, null, 2)}
   "unanswered": [],
   "hidden": ["appstore"]
 }
+
+Add --format json for a compact { answers: { id: value }, notes? } map, or
+--format md for a Markdown summary.
 `;
 }
 

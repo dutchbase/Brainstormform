@@ -8,14 +8,19 @@ notifications. Any MCP-capable agent can use it.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `ask_questions` | the form spec, `open`, `waitSeconds`, `keep` | `{ sessionId, url }` |
-| `read_answers` | `sessionId` | answers so far + `{ status, revision, answered, notes }` |
+| `read_answers` | `sessionId`, `format?`, `since?` | answers so far + `{ status, revision, answered, notes }` |
 | `add_questions` | `sessionId`, `questions` or `categories` | `{ revision, questionCount }` |
-| `wait_for_answers` | `sessionId`, `timeoutSeconds` | final answers after Finish |
+| `wait_for_answers` | `sessionId`, `timeoutSeconds`, `format?` | final answers after Finish |
 
 `ask_questions` returns as soon as the form is live unless you pass
 `waitSeconds`, which blocks up to that long for the user to finish.
 `wait_for_answers` accepts `timeoutSeconds` (default 600); pass `0` to return
 immediately and poll instead of blocking.
+
+To keep responses small, pass `format: "json"` for a compact
+`{ answers: { id: value }, notes? }` map, or `format: "md"` for a Markdown
+summary. `read_answers` also takes `since: <progressRevision>` to return only
+what changed since a previous read. Results are sent as compact JSON text.
 
 Typical flow:
 
@@ -36,6 +41,9 @@ as `brainstormform://session/<id>`. It sends:
 
 Clients that do not surface notifications can poll `read_answers` instead — it
 always works.
+
+A static `brainstormform://guide` resource returns the full question format, so
+the tool descriptions can stay short.
 
 ## Client config
 

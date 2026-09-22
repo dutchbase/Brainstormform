@@ -35,14 +35,16 @@ Brainstormform is what you use when the questions are the point.
 - **Unlimited questions, in sections.** A progress bar and pagination keep it
   navigable.
 - **Every common answer type.** Single and multi choice, text, long text, number,
-  rating scale, yes/no, file upload, and image cards.
+  rating scale, yes/no, file upload, image cards, a matrix grid and a drag-free
+  ranking question.
 - **Conditional questions.** Show a question only when an earlier answer calls
   for it.
 - **A note on any answer.** When none of the options quite fit, add free-text
   context to any question — even one you skip.
 - **Live follow-ups.** The agent reads your answers as you go and can add new
   questions to the same form while you are still filling it in.
-- **Answers as JSON.** Typed and clean, straight into the agent's context.
+- **Answers as JSON.** Typed and clean, straight into the agent's context. Or ask
+  for a compact map or Markdown with `--format json|md` to save tokens.
 - **Local by default.** Binds to `127.0.0.1`, random port and token, deleted once
   read. Nothing leaves the machine.
 

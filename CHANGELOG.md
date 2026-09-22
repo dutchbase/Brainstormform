@@ -6,8 +6,31 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-21
+
 ### Added
 
+- **Opt-in compact and Markdown answers.** `wait`, `get`, `progress` and `export`
+  accept `--format json` (a compact `{ answers: { id: value }, notes? }` map) or
+  `--format md` (a Markdown summary). The MCP `read_answers` /
+  `wait_for_answers` tools take the same `format`. The default `full` shape is
+  unchanged.
+- **`progress --since <revision>`.** The server records which question ids
+  changed on every save; a poll can return only the delta (falling back to the
+  full answers when more than one save was missed).
+- **`matrix` and `rank` question types.** A matrix is a row × column grid, a rank
+  lets the user reorder options.
+- **Server-side adaptive follow-ups.** A question may declare
+  `then: { question, … , add: [...] }`; the form appends the follow-ups when the
+  condition first matches, with no agent polling.
+- **`ask --from <id>`** seeds a new form's defaults with a past session's
+  answers, **`ask --preset <name>`** loads a bundled question bank, and
+  **`resume <id>`** restarts the server for a session whose process exited.
+- **`--force`** lets `--out`/`export` overwrite a non-empty directory.
+- **MCP `brainstormform://guide` resource**, so tool descriptions can stay short.
+- **Front-end extras:** an optional scale slider (`settings.scaleStyle`),
+  auto-advance (`settings.autoAdvance`), a `?` keyboard-shortcut overlay, a print
+  stylesheet, a section label and a "Skip section" button.
 - **Notes on every question.** Any question — including one you answered or
   skipped — accepts a free-text note, returned in a `notes` map keyed by
   question id. It is the place to add nuance when no option is quite right. The
@@ -23,14 +46,25 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ### Changed
 
+- **MCP results are a single compact JSON text payload** (no pretty-print and no
+  duplicate `structuredContent`), and `read_answers` accepts `since`.
+- `waitForAnswers` resolves on filesystem changes instead of a 300 ms poll.
 - `wait --timeout 0` / `wait_for_answers({ timeoutSeconds: 0 })` now return
   immediately instead of blocking.
 - Local `visual` images must live under the directory `ask` runs from.
-- The npm package now ships `docs/`, `CHANGELOG.md` and `CONTRIBUTING.md`.
+- The npm package now ships `docs/`, `presets/`, `CHANGELOG.md` and
+  `CONTRIBUTING.md`.
 - `VERSION` is read from `package.json`; CI runs `node --check` over `src/`.
+- `question.default` is now actually applied by the form (it was normalised but
+  ignored), which also backs `ask --from`.
+- The front-end script moved to `src/ui.js`, so the form's CSP no longer needs
+  `script-src 'unsafe-inline'`.
 
 ### Fixed
 
+- `--out` / `export --to` no longer recursively delete a non-empty destination
+  that is not a session directory; pass `--force` to override.
+- Oversized request bodies stop being read as soon as the limit is crossed.
 - CLI flags no longer swallow the next argument: `ask --open questions.json`
   works. A shared parser replaces the two copies.
 - `scale`/`number` reject a non-positive `step`, which could freeze the form in

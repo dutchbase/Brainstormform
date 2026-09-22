@@ -18,25 +18,35 @@ user:  Finish       -> agent's wait resolves with the final answers
 ```
 
 This lets an agent run a real interview: start broad, then ask targeted
-follow-ups based on what the user actually said.
+follow-ups based on what the user actually said. A form can also do this on its
+own: a question's `then` rule appends follow-ups when an answer matches, with no
+agent in the loop (see [schema.md](schema.md)).
 
 ## CLI
 
 ```bash
 brainstormform ask questions.json --open     # {"sessionId":"bf-...","url":"..."}
 brainstormform progress <id>                 # draft answers + status
+brainstormform progress <id> --since 4       # only what changed since progressRevision 4
 brainstormform add <id> followups.json       # append questions
 brainstormform wait <id> --timeout 600       # resolves on Finish
 ```
+
+`--since` keeps the poll cheap: the server records which question ids changed on
+every save and returns only those. If more than one save was missed it falls back
+to the full answers, so nothing is lost.
 
 ## MCP
 
 ```
 ask_questions({ title, categories, open: true })   -> { sessionId, url }
-read_answers({ sessionId })                         -> { status, revision, answers }
+read_answers({ sessionId, format: "json" })         -> compact answers so far
 add_questions({ sessionId, questions: [...] })      -> { revision, questionCount }
 wait_for_answers({ sessionId, timeoutSeconds: 600 })-> final answers
 ```
+
+`read_answers` also accepts `since:<progressRevision>` to return only changed
+answers. `format` may be `full` (default), `json` or `md`.
 
 ## How it works
 

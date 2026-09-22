@@ -12,7 +12,9 @@ A form is a JSON spec. Pass it to `brainstormform ask` (from a file or stdin).
     "pageSize": 5,                     // questions per page (default 5)
     "theme": "auto",                   // auto | light | dark
     "submitLabel": "Continue",         // label for the Next button
-    "finishLabel": "Finish"            // label for the Finish button
+    "finishLabel": "Finish",           // label for the Finish button
+    "scaleStyle": "buttons",           // buttons | slider
+    "autoAdvance": false               // advance after a single-choice answer
   },
   "categories": [
     {
@@ -39,6 +41,7 @@ Every question needs a `type` and a `label`.
 | `content` | all | longer Markdown block |
 | `placeholder` | text, number | grey hint text |
 | `showIf` | all | conditional visibility (below) |
+| `then` | all | append follow-ups when an answer matches (below) |
 
 ### Types
 
@@ -52,6 +55,11 @@ Every question needs a `type` and a `label`.
 | `scale` | `min`, `max`, `scaleLabels` (default 1–5) |
 | `boolean` | |
 | `file` | `accept`, `multiple`, `maxFiles` |
+| `matrix` | `rows`, `columns` (both `[{ value, label }]` or plain strings) |
+| `rank` | at least two `options`; the user reorders them |
+
+A `matrix` answer is an object keyed by row value: `{ "speed": "High" }`. A
+`rank` answer is the ordered array of option values.
 
 Options look like:
 
@@ -80,6 +88,28 @@ appear **before** this one.
 | `in` | the answer is one of an array of values |
 | `contains` | a multi/visual answer includes the value |
 | `answered` | the question has any answer (`true`) or none (`false`) |
+
+### Adaptive follow-ups (`then`)
+
+The form can append questions itself when an answer matches, without the agent
+polling. `then` takes the same operators as `showIf` (using `equals`/`not`/`in`/
+`contains`/`answered`) plus an `add` array of questions:
+
+```jsonc
+{
+  "id": "pets",
+  "type": "boolean",
+  "label": "Do you have pets?",
+  "then": {
+    "question": "pets",
+    "equals": true,
+    "add": [{ "id": "petnames", "type": "text", "label": "What are their names?" }]
+  }
+}
+```
+
+A rule can reference its own question. Follow-ups are appended once, the moment
+the condition first matches, and the open form receives them live.
 
 ### Markdown
 
@@ -117,6 +147,10 @@ When the user presses Finish, `brainstormform wait` prints:
 - `notes` — free-text annotations keyed by question id. Every question offers an
   "Add a note" control, so a user can qualify an answer or explain why none of
   the options fit. Agents should read these alongside the answers.
+
+For lower-token reads, `wait`, `get`, `progress` and `export` accept
+`--format json` (a compact `{ answers: { id: value }, notes? }` map) or
+`--format md` (a Markdown summary). The default `full` shape above is unchanged.
 
 ## Schema
 
