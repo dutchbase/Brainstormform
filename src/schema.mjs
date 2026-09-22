@@ -1,4 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { allQuestions } from './render.mjs';
+
+export { allQuestions };
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 export const VERSION = pkg.version;
@@ -271,10 +274,6 @@ export function collectIds(spec) {
   const ids = new Set();
   for (const cat of spec.categories) for (const q of cat.questions) ids.add(q.id);
   return ids;
-}
-
-export function allQuestions(spec) {
-  return spec.categories.flatMap((c) => c.questions);
 }
 
 export const SPEC_SCHEMA = {

@@ -49,16 +49,19 @@ function readBody(req, limit) {
     const chunks = [];
     let size = 0;
     let tooBig = false;
-    req.on('data', (chunk) => {
+    const onData = (chunk) => {
       if (tooBig) return;
       size += chunk.length;
       if (size > limit) {
         tooBig = true;
+        req.removeListener('data', onData);
+        req.resume();
         reject(new Error('payload-too-large'));
         return;
       }
       chunks.push(chunk);
-    });
+    };
+    req.on('data', onData);
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', (err) => {
       if (!tooBig) reject(err);

@@ -1,5 +1,5 @@
 const base = document.documentElement.dataset.bfBase;
-const { renderMarkdown, renderInlineMarkdown, isVisible, escapeHtml } = await import(base + '/app/render.mjs');
+const { renderMarkdown, renderInlineMarkdown, isVisible, escapeHtml, allQuestions } = await import(base + '/app/render.mjs');
 const noStream = new URLSearchParams(location.search).has('nostream');
 const token = base.split('/').pop();
 const STORE = 'brainstormform:' + token;
@@ -15,7 +15,6 @@ const state = {
 
 const cssEscape = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'));
 const qEl = (id) => mainEl.querySelector('[data-qid="' + cssEscape(id) + '"]');
-const allQuestions = (spec) => spec.categories.flatMap((c) => c.questions);
 const isEmpty = (v) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
 const isVisibleQ = (q) => isVisible(q, state.answers);
 
