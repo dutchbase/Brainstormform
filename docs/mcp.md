@@ -49,6 +49,10 @@ the tool descriptions can stay short. `brainstormform://profile` returns the
 summary. When no profile exists, onboard with
 `ask_questions({ preset: "profile", saveAsProfile: true })`.
 
+Questions accept an optional `explanation` — a Markdown context block with links
+and images (`content` is an alias). Images may be `https://` URLs or local files
+under the directory `ask` runs from.
+
 ## Client config
 
 Claude Code:

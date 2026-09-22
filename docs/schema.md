@@ -38,7 +38,8 @@ Every question needs a `type` and a `label`.
 | `id` | all | auto `q1..qN`; used in `showIf` and the answers |
 | `required` | all | default `false` |
 | `intro` | all | short Markdown help under the label |
-| `content` | all | longer Markdown block |
+| `explanation` | all | Markdown context block; supports links and images |
+| `content` | all | alias for `explanation` |
 | `placeholder` | text, number | grey hint text |
 | `showIf` | all | conditional visibility (below) |
 | `then` | all | append follow-ups when an answer matches (below) |
@@ -113,10 +114,20 @@ the condition first matches, and the open form receives them live.
 
 ### Markdown
 
-`label`, `intro`, `content`, option labels and descriptions, and category intros
-support a small Markdown subset: `**bold**`, `*italic*`, `` `code` ``,
-`[links](https://…)`, `- lists` and `# headings`. Links open in a new tab. Raw
-HTML is escaped and only `http`, `https` and `mailto` links are allowed.
+`label`, `intro`, `explanation`, option labels and descriptions, and category
+intros support a small Markdown subset: `**bold**`, `*italic*`, `` `code` ``,
+`[links](https://…)`, `![images](…)`, `- lists` and `# headings`. Links and
+images open in a new tab. Raw HTML is escaped and only `http`, `https` and
+`mailto` links are allowed.
+
+Images may be an `https://` URL, a `data:image/…` URI, or a path to a local file
+under the directory you run `ask` from (image extensions only). Local files are
+served through the same safe, whitelisted route as `visual` option images, so the
+browser never reads arbitrary paths.
+
+```jsonc
+{ "explanation": "Here is the layout we sketched:\n\n![wireframe](./wireframe.png)" }
+```
 
 ## Answers output
 

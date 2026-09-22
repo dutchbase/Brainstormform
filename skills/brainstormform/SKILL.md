@@ -124,6 +124,13 @@ Run `brainstormform guide` for the full format. Summary: `categories` hold
 `scale`, `boolean`, `file`, `matrix`, `rank`; `showIf` shows a question
 conditionally; every question accepts a free-text `note`.
 
+Give each question an optional `explanation` (Markdown) with the context that
+makes it easy to answer: a sentence on why it matters, `[links](https://…)`
+(open in a new tab), and images. Images can be `https://` URLs or local files
+under the directory you run `ask` from, e.g. `![mockup](./mock.png)` — generate a
+mockup or take a screenshot into that directory and reference it. The older name
+`content` is an alias for `explanation`.
+
 ## Quality rules
 
 - Ask real, decision-ready questions — not filler to hit a count.

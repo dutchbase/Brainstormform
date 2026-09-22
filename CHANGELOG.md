@@ -6,6 +6,19 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
+### Added
+
+- **Per-question `explanation`.** An optional Markdown context block so an agent
+  can explain why a question matters. It supports links (open in a new tab) and
+  images. The older `content` field is accepted as an alias.
+- **Images in explanations and intros.** `![alt](src)` renders as a clickable,
+  lazy-loaded image that opens full size in a new tab. Sources may be `https://`
+  URLs, `data:image/…` URIs, or local files under the directory `ask` runs from
+  (image extensions only), served through the existing whitelisted asset route —
+  so an agent can generate a mockup or screenshot and embed it.
+
 ## [0.5.0] - 2026-09-22
 
 ### Added
