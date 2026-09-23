@@ -35,6 +35,44 @@ test('visual type requires an image per option', () => {
   assert.equal(spec.categories[0].questions[0].options[0].image, 'https://x/y.png');
 });
 
+test('preview is normalized on questions, categories and options', () => {
+  const spec = normalizeSpec({
+    categories: [
+      {
+        title: 'C',
+        preview: { language: 'markdown', code: '# hi' },
+        questions: [
+          {
+            id: 'q',
+            type: 'visual',
+            label: 'Pick',
+            preview: 'plain html',
+            options: [{ value: 'a', image: 'https://x/y.png', preview: { src: './mock.ts' } }],
+          },
+        ],
+      },
+    ],
+  });
+  const cat = spec.categories[0];
+  assert.equal(cat.preview.language, 'markdown');
+  assert.equal(cat.preview.render, true);
+  const q = cat.questions[0];
+  assert.equal(q.preview.language, 'html');
+  assert.equal(q.preview.code, 'plain html');
+  const opt = q.options[0];
+  assert.equal(opt.preview.language, 'ts');
+  assert.equal(opt.preview.render, false);
+  assert.equal(opt.preview.src, './mock.ts');
+});
+
+test('preview rejects render on a non-renderable language and a missing source', () => {
+  assert.throws(
+    () => normalizeSpec({ questions: [{ type: 'text', label: 'x', preview: { language: 'ts', render: true, code: 'x' } }] }),
+    SpecError,
+  );
+  assert.throws(() => normalizeSpec({ questions: [{ type: 'text', label: 'x', preview: { language: 'html' } }] }), SpecError);
+});
+
 test('normalizeFragment appends and validates against the existing spec', () => {
   const spec = normalizeSpec({ questions: [{ id: 'goal', type: 'text', label: 'Goal' }] });
   assert.throws(() => normalizeFragment(spec, [{ id: 'goal', type: 'text', label: 'dup' }]), SpecError);
@@ -143,6 +181,49 @@ test('end-to-end: live progress, append, submit, host guard, assets', async () =
     });
     assert.equal(afterSubmit.status, 409);
   } finally {
+    await srv.close();
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('server serves sandboxed previews and resolves local preview files', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bf-preview-'));
+  const prev = process.cwd();
+  process.chdir(dir);
+  await fsp.writeFile(path.join(dir, 'mock.html'), '<h1>hi</h1>');
+  const spec = normalizeSpec({
+    questions: [
+      { id: 'a', type: 'text', label: 'A', preview: { code: '<b>inline</b>', title: 'Inline' } },
+      { id: 'b', type: 'text', label: 'B', preview: { src: 'mock.html' } },
+      { id: 'c', type: 'text', label: 'C', preview: { language: 'ts', code: 'const x = 1;' } },
+    ],
+  });
+  const token = 'preview-token';
+  const srv = await startServer({ sessionDir: path.join(dir, 'session'), spec, token });
+  const origin = `http://127.0.0.1:${srv.port}`;
+  try {
+    const ui = await fetch(`${origin}/s/${token}`);
+    assert.match(ui.headers.get('content-security-policy'), /frame-src 'self'/);
+
+    const [a, b, c] = (await (await fetch(`${origin}/s/${token}/api/questions`)).json()).spec.categories[0].questions;
+    assert.match(a.preview.url, /\/api\/preview\/0$/);
+    assert.equal(a.preview.code, '<b>inline</b>');
+    assert.equal(b.preview.language, 'html');
+    assert.equal(b.preview.code, '<h1>hi</h1>');
+    assert.equal(c.preview.render, false);
+    assert.equal(c.preview.url, undefined);
+
+    const pv = await fetch(origin + a.preview.url);
+    assert.equal(pv.status, 200);
+    assert.match(pv.headers.get('content-security-policy'), /sandbox allow-scripts/);
+    assert.match(await pv.text(), /<b>inline<\/b>/);
+
+    const themed = await (await fetch(origin + a.preview.url + '?theme=dark')).text();
+    assert.match(themed, /color-scheme:dark/);
+
+    assert.equal((await fetch(`${origin}/s/${token}/api/preview/9`)).status, 404);
+  } finally {
+    process.chdir(prev);
     await srv.close();
     await fsp.rm(dir, { recursive: true, force: true });
   }

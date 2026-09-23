@@ -9,6 +9,58 @@ export function escapeHtml(value) {
 const SAFE_URL = /^(https?:|mailto:)/i;
 const SAFE_IMAGE_SRC = /^(https?:|data:image\/|\/(?!\/))/i;
 
+const RENDERABLE_LANGUAGES = new Set(['html', 'svg', 'markdown']);
+
+export function isRenderableLanguage(language) {
+  return RENDERABLE_LANGUAGES.has(String(language == null ? '' : language).toLowerCase());
+}
+
+const HL_KEYWORDS =
+  'const,let,var,function,return,if,else,for,while,do,switch,case,break,continue,import,from,export,default,class,extends,new,this,async,await,try,catch,finally,throw,typeof,instanceof,in,of,delete,void,yield,super,static,get,set,true,false,null,undefined,interface,type,enum,implements,public,private,protected,readonly,as,any,string,number,boolean';
+const HL_CSS_KEYWORDS = 'important,media,import,charset,keyframes,supports,font-face,root';
+
+// Best-effort, dependency-free syntax highlighting. Escapes every token itself,
+// so callers must drop the result straight into innerHTML.
+// ponytail: regex highlighter, swap for a real lib only if agents complain.
+export function highlightCode(value, language) {
+  const text = String(value == null ? '' : value);
+  const lang = String(language == null ? '' : language).toLowerCase();
+  if (lang === 'markdown' || lang === 'text' || lang === '') return escapeHtml(text);
+  const isHtml = lang === 'html' || lang === 'svg';
+
+  let re;
+  let classes;
+  if (isHtml) {
+    re = /(<!--[\s\S]*?-->)|(<\/?[a-zA-Z][\w:-]*)|(\/?>)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|([a-zA-Z_:][\w:.-]*(?=\s*=))/g;
+    classes = ['', 'hl-com', 'hl-tag', 'hl-tag', 'hl-str', 'hl-attr'];
+  } else {
+    const words = (lang === 'css' ? HL_CSS_KEYWORDS : HL_KEYWORDS).split(',');
+    re = new RegExp(
+      '(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/)|("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|`(?:[^`\\\\]|\\\\.)*`)|\\b(\\d+(?:\\.\\d+)?)\\b|\\b(' +
+        words.join('|') +
+        ')\\b',
+      'g',
+    );
+    classes = ['', 'hl-com', 'hl-str', 'hl-num', 'hl-key'];
+  }
+
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out += escapeHtml(text.slice(last, m.index));
+    let cls = '';
+    for (let g = 1; g < classes.length; g++) {
+      if (m[g] !== undefined) { cls = classes[g]; break; }
+    }
+    out += '<span class="' + cls + '">' + escapeHtml(m[0]) + '</span>';
+    last = m.index + m[0].length;
+    if (m[0] === '') re.lastIndex++;
+  }
+  out += escapeHtml(text.slice(last));
+  return out;
+}
+
 export function renderInlineMarkdown(value) {
   let text = escapeHtml(value);
   const stash = [];

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml, allQuestions, compactAnswers, summaryMarkdown, formatAnswers, progressRecord } from '../src/render.mjs';
+import { renderMarkdown, renderInlineMarkdown, evaluateShowIf, escapeHtml, allQuestions, compactAnswers, summaryMarkdown, formatAnswers, progressRecord, highlightCode, isRenderableLanguage } from '../src/render.mjs';
 
 test('escapeHtml neutralises tags', () => {
   assert.equal(escapeHtml('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
@@ -52,6 +52,31 @@ test('an image is not double-parsed as a link', () => {
 test('renderMarkdown keeps an image inline in its paragraph', () => {
   const html = renderMarkdown('Before\n\n![x](https://example.com/x.png)\n\nAfter');
   assert.match(html, /<p><a class="md-img"[^>]*><img/);
+});
+
+test('isRenderableLanguage allows only html, svg and markdown', () => {
+  assert.equal(isRenderableLanguage('html'), true);
+  assert.equal(isRenderableLanguage('SVG'), true);
+  assert.equal(isRenderableLanguage('markdown'), true);
+  assert.equal(isRenderableLanguage('tsx'), false);
+  assert.equal(isRenderableLanguage(undefined), false);
+});
+
+test('highlightCode escapes markup and marks tokens', () => {
+  const html = highlightCode('<script>alert(1)</script>', 'html');
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /&lt;script/);
+  assert.match(html, /class="hl-tag"/);
+
+  const js = highlightCode('const x = "hi"; // note\nreturn 1;', 'js');
+  assert.match(js, /class="hl-key">const/);
+  assert.match(js, /class="hl-str">&quot;hi&quot;/);
+  assert.match(js, /class="hl-com">\/\/ note/);
+  assert.match(js, /class="hl-num">1/);
+});
+
+test('highlightCode leaves markdown and text escaped and unhighlighted', () => {
+  assert.equal(highlightCode('# hi <b>', 'markdown'), '# hi &lt;b&gt;');
 });
 
 test('evaluateShowIf covers the operators', () => {

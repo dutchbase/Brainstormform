@@ -1,5 +1,5 @@
 const base = document.documentElement.dataset.bfBase;
-const { renderMarkdown, renderInlineMarkdown, isVisible, escapeHtml, allQuestions } = await import(base + '/app/render.mjs');
+const { renderMarkdown, renderInlineMarkdown, isVisible, escapeHtml, allQuestions, highlightCode } = await import(base + '/app/render.mjs');
 const noStream = new URLSearchParams(location.search).has('nostream');
 const token = base.split('/').pop();
 const STORE = 'brainstormform:' + token;
@@ -12,6 +12,9 @@ const state = {
   byId: {}, previews: {}, answers: {}, other: {}, skipped: {}, notes: {},
   submitted: false, review: false, startedAt: Date.now(), advanceTimer: null,
 };
+
+const PREVIEW_TAB_KEY = 'brainstormform:pvtab';
+let currentPreview = null;
 
 const cssEscape = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'));
 const qEl = (id) => mainEl.querySelector('[data-qid="' + cssEscape(id) + '"]');
@@ -62,6 +65,28 @@ function prevPage() {
   return -1;
 }
 
+function previewSrc(preview) {
+  if (!preview.url) return '';
+  const dark = preview.theme && document.documentElement.dataset.theme === 'dark';
+  return preview.url + (dark ? (preview.url.includes('?') ? '&' : '?') + 'theme=dark' : '');
+}
+function previewButton(preview, key, cls) {
+  if (!preview) return '';
+  return '<button type="button" class="pv-open' + (cls ? ' ' + cls : '') + '" data-preview="' + escapeHtml(key) + '">View example</button>';
+}
+function previewInline(preview, key) {
+  if (!preview) return '';
+  if (preview.render && preview.url) {
+    return '<div class="pv-inline"><iframe sandbox="allow-scripts" src="' + escapeHtml(previewSrc(preview)) +
+      '" title="' + escapeHtml(preview.title || 'Example') + '" loading="lazy"></iframe></div>';
+  }
+  if (preview.code) {
+    return '<pre class="pv-code wrap" style="margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-sm)"><code>' +
+      highlightCode(preview.code, preview.language) + '</code></pre>';
+  }
+  return previewButton(preview, key, '');
+}
+
 function questionHtml(q) {
   const val = state.answers[q.id];
   let body = '';
@@ -75,6 +100,7 @@ function questionHtml(q) {
         '<input type="' + type + '" name="qf_' + escapeHtml(q.id) + '" value="' + escapeHtml(o.value) + '"' + (checked ? ' checked' : '') + '>' +
         '<span class="opt-main"><span class="opt-label">' + escapeHtml(o.label) + '</span>' +
         (o.description ? '<span class="opt-desc">' + escapeHtml(o.description) + '</span>' : '') +
+        previewButton(o.preview, 'o:' + q.id + ':' + o.value, 'opt-pv') +
         '</span></label>';
     }).join('');
     if (q.allowOther) {
@@ -95,7 +121,8 @@ function questionHtml(q) {
         '<input type="' + type + '" name="qf_' + escapeHtml(q.id) + '" value="' + escapeHtml(o.value) + '"' + (checked ? ' checked' : '') + '>' +
         '<img src="' + escapeHtml(o.image) + '" alt="' + escapeHtml(o.label) + '" loading="lazy" onerror="this.style.opacity=.15">' +
         '<span class="vbody"><span class="vlabel">' + escapeHtml(o.label) + '</span>' +
-        (o.description ? '<span class="vdesc">' + escapeHtml(o.description) + '</span>' : '') + '</span></label>';
+        (o.description ? '<span class="vdesc">' + escapeHtml(o.description) + '</span>' : '') +
+        previewButton(o.preview, 'o:' + q.id + ':' + o.value, 'opt-pv') + '</span></label>';
     }).join('') + '</div>';
   } else if (q.type === 'text') {
     body = '<input class="text-input" type="text" data-field="' + escapeHtml(q.id) + '" placeholder="' + escapeHtml(q.placeholder || '') + '" value="' + escapeHtml(val == null ? '' : val) + '">';
@@ -160,6 +187,7 @@ function questionHtml(q) {
     '<div class="qlabel" id="lbl_' + escapeHtml(q.id) + '">' + renderInlineMarkdown(q.label) + (q.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</div>' +
     (q.intro ? '<div class="md">' + renderMarkdown(q.intro) + '</div>' : '') +
     (q.explanation ? '<div class="explanation md">' + renderMarkdown(q.explanation) + '</div>' : '') +
+    (q.preview && q.preview.alwaysOpen ? previewInline(q.preview, 'q:' + q.id) : previewButton(q.preview, 'q:' + q.id)) +
     body +
     noteBlock +
     '<div class="q-foot"><span></span>' + skipBtn + '</div>' +
@@ -175,7 +203,9 @@ function render(scroll) {
   const vis = visibleOnPage(state.page);
   const head = page.first
     ? '<div class="page-head" style="animation:rise .3s cubic-bezier(.2,.7,.2,1) both"><h2>' + renderInlineMarkdown(page.cat.title) + '</h2>' +
-      (page.cat.intro ? '<div class="md">' + renderMarkdown(page.cat.intro) + '</div>' : '') + '</div>'
+      (page.cat.intro ? '<div class="md">' + renderMarkdown(page.cat.intro) + '</div>' : '') +
+      (page.cat.preview && page.cat.preview.alwaysOpen ? previewInline(page.cat.preview, 'cat:' + page.cat.id) : previewButton(page.cat.preview, 'cat:' + page.cat.id)) +
+      '</div>'
     : '';
   mainEl.innerHTML = head + '<div class="page anim" id="pageHost" data-dir="' + state.dir + '">' + vis.map(questionHtml).join('') + '</div>';
   mainEl.classList.remove('anim');
@@ -640,6 +670,8 @@ mainEl.addEventListener('input', (e) => {
 mainEl.addEventListener('click', (e) => {
   const t = e.target;
   if (t.matches && t.matches('input[type=file]')) return;
+  const pvBtn = t.closest('[data-preview]');
+  if (pvBtn) { e.preventDefault(); e.stopPropagation(); openPreview(pvBtn.dataset.preview); return; }
   const zone = t.closest('[data-drop]');
   if (zone) { const input = qEl(zone.dataset.drop).querySelector('input[type=file]'); if (input) input.click(); return; }
   const noteBtn = t.closest('[data-note]');
@@ -781,6 +813,62 @@ $('#settingsClose').addEventListener('click', closeSettings);
 $('#settingsSave').addEventListener('click', saveSettings);
 $('#settingsClear').addEventListener('click', clearSettings);
 
+function previewDefaultTab(canRender) {
+  if (!canRender) return 'code';
+  let pref = 'preview';
+  try { pref = localStorage.getItem(PREVIEW_TAB_KEY) || 'preview'; } catch { /* ignore */ }
+  return pref === 'code' ? 'code' : 'preview';
+}
+function setPreviewTab(tab) {
+  for (const b of document.querySelectorAll('#previewPanel .pv-tab')) b.classList.toggle('on', b.dataset.pvTab === tab);
+  for (const p of document.querySelectorAll('#previewPanel .pv-pane')) p.hidden = p.dataset.pvPane !== tab;
+  try { localStorage.setItem(PREVIEW_TAB_KEY, tab); } catch { /* ignore */ }
+}
+function setPreviewWidth(w) {
+  $('#pvFrame').dataset.w = w;
+  for (const b of document.querySelectorAll('#previewPanel .pv-dev')) b.classList.toggle('on', b.dataset.pvWidth === w);
+}
+function openPreview(key) {
+  const preview = state.previews[key];
+  if (!preview) return;
+  currentPreview = preview;
+  const canRender = preview.render && !!preview.url;
+  $('#pvTitle').textContent = preview.title || 'Example';
+  $('#pvCode').innerHTML = highlightCode(preview.code || '', preview.language);
+  const frame = $('#pvFrame');
+  frame.removeAttribute('src');
+  setPreviewWidth('desktop');
+  $('#pvDevices').hidden = !canRender;
+  $('#pvNewTab').hidden = !canRender;
+  $('#pvCopy').hidden = !preview.code;
+  for (const b of document.querySelectorAll('#previewPanel .pv-tab')) if (b.dataset.pvTab === 'preview') b.hidden = !canRender;
+  if (canRender) frame.src = previewSrc(preview);
+  setPreviewTab(previewDefaultTab(canRender));
+  $('#previewPanel').hidden = false;
+  $('#pvClose').focus();
+}
+function closePreview() {
+  if ($('#previewPanel').hidden) return;
+  $('#previewPanel').hidden = true;
+  $('#pvFrame').removeAttribute('src');
+  currentPreview = null;
+}
+async function copyPreview() {
+  const code = (currentPreview && currentPreview.code) || '';
+  try {
+    await navigator.clipboard.writeText(code);
+    toast('Code copied');
+  } catch {
+    toast('Could not copy');
+  }
+}
+$('#pvClose').addEventListener('click', closePreview);
+for (const b of document.querySelectorAll('#previewPanel .pv-tab')) b.addEventListener('click', () => setPreviewTab(b.dataset.pvTab));
+for (const b of document.querySelectorAll('#previewPanel .pv-dev')) b.addEventListener('click', () => setPreviewWidth(b.dataset.pvWidth));
+$('#pvWrap').addEventListener('click', () => { $('#pvWrap').classList.toggle('on'); $('#pvCode').classList.toggle('wrap'); });
+$('#pvNewTab').addEventListener('click', () => { if (currentPreview && currentPreview.url) window.open(previewSrc(currentPreview), '_blank', 'noopener'); });
+$('#pvCopy').addEventListener('click', copyPreview);
+
 function activeChoiceQuestion() {
   const focused = document.activeElement && document.activeElement.closest('[data-qid]');
   if (focused) { const q = state.byId[focused.dataset.qid]; if (q && (q.type === 'single' || q.type === 'multi' || q.type === 'visual' || q.type === 'boolean' || q.type === 'scale')) return q; }
@@ -791,8 +879,9 @@ document.addEventListener('keydown', (e) => {
   if (state.submitted) return;
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (e.key === 'Escape') { $('#help').hidden = true; closeSettings(); closePreview(); return; }
+  if (!$('#previewPanel').hidden) return;
   if (e.key === '?') { e.preventDefault(); toggleHelp(); return; }
-  if (e.key === 'Escape') { $('#help').hidden = true; closeSettings(); return; }
   if (/^[1-9]$/.test(e.key)) {
     const q = activeChoiceQuestion();
     if (!q) return;
@@ -850,7 +939,17 @@ function onRemoteSubmit() {
 
 function indexSpec() {
   state.byId = {};
-  for (const cat of state.spec.categories) for (const q of cat.questions) state.byId[q.id] = q;
+  state.previews = {};
+  for (const cat of state.spec.categories) {
+    if (cat.preview) state.previews['cat:' + cat.id] = cat.preview;
+    for (const q of cat.questions) {
+      state.byId[q.id] = q;
+      if (q.preview) state.previews['q:' + q.id] = q.preview;
+      if (Array.isArray(q.options)) {
+        for (const o of q.options) if (o.preview) state.previews['o:' + q.id + ':' + o.value] = o.preview;
+      }
+    }
+  }
 }
 
 async function boot() {

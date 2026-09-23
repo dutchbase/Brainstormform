@@ -6,6 +6,20 @@ All notable changes to Brainstormform are documented here. The format is based o
 
 ## [Unreleased]
 
+### Added
+
+- **Code & design examples (`preview`).** An agent can attach a snippet or a
+  design example to a question, a category or a single option. A **View example**
+  button opens a Preview/Code pop-up with a Desktop/Tablet/Mobile width toggle and
+  Copy, Wrap and Open-in-new-tab actions. Source can be inline `code` or a local
+  `src` file, and `language` covers `html`, `svg`, `markdown`, `css`, `js`, `ts`,
+  `tsx`, `jsx`, `vue`, `svelte` and `text`. `html`/`svg`/`markdown` render live;
+  the rest show as highlighted code, so no compiler is bundled. Rendered previews
+  run in a sandboxed iframe on their own origin (scripts allowed, no same-origin
+  access) and may load internet images, fonts and the Tailwind Play CDN. New
+  `alwaysOpen` (inline instead of a button) and `theme` (follow the form's
+  dark/light mode) options. See `examples/design-preview.json`.
+
 ### Fixed
 
 - **`read_answers` / `progress --since` no longer hides earlier answers.** A read

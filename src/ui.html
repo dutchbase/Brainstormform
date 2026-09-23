@@ -176,6 +176,39 @@
   .settings-check{display:flex !important; align-items:center; gap:8px}
   .settings-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:6px}
   .settings-note{color:var(--muted); font-size:12.5px; margin:0}
+  .pv-open{display:inline-flex; align-items:center; gap:6px; margin-top:10px; font:inherit; font-size:13px; font-weight:540; cursor:pointer; padding:7px 12px; border:1px solid var(--border-strong); background:var(--panel-2); color:var(--text); border-radius:9px; transition:border-color .15s, background .15s}
+  .pv-open:hover{border-color:var(--accent); color:var(--accent)}
+  .pv-open.opt-pv{margin:6px 0 0; padding:4px 9px; font-size:12px}
+  .pv-inline{margin-top:12px; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden}
+  .pv-inline iframe{width:100%; height:320px; border:0; background:#fff; display:block}
+  .preview-card{width:min(960px,94vw); height:min(88vh,780px); max-height:88vh; display:flex; flex-direction:column; padding:0; overflow:hidden}
+  .pv-head{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; border-bottom:1px solid var(--border)}
+  .pv-head h3{margin:0; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .pv-tools{display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); flex-wrap:wrap}
+  .pv-tabs{display:flex; gap:3px; background:var(--bg-2); padding:3px; border-radius:10px}
+  .pv-tab{font:inherit; font-size:13.5px; border:none; background:transparent; color:var(--muted); padding:6px 13px; border-radius:8px; cursor:pointer}
+  .pv-tab.on{background:var(--panel); color:var(--text); box-shadow:var(--shadow)}
+  .pv-devices{display:flex; gap:2px; background:var(--bg-2); padding:3px; border-radius:10px; margin-left:auto}
+  .pv-dev{font:inherit; font-size:12.5px; border:none; background:transparent; color:var(--muted); padding:6px 10px; border-radius:8px; cursor:pointer}
+  .pv-dev.on{background:var(--panel); color:var(--text)}
+  .pv-actions{display:flex; gap:6px}
+  .pv-act{font:inherit; font-size:13px; border:1px solid var(--border); background:transparent; color:var(--text); padding:6px 10px; border-radius:9px; cursor:pointer}
+  .pv-act:hover{border-color:var(--border-strong); background:var(--panel-2)}
+  .pv-body{flex:1; min-height:0; display:flex; background:var(--bg-2)}
+  .pv-pane{flex:1; min-height:0; display:flex}
+  .pv-pane[hidden]{display:none}
+  iframe.pv-device{width:100%; height:100%; border:0; background:#fff; margin:0 auto; transition:max-width .2s}
+  iframe.pv-device[data-w="tablet"]{max-width:768px; box-shadow:var(--shadow-lift)}
+  iframe.pv-device[data-w="mobile"]{max-width:390px; box-shadow:var(--shadow-lift)}
+  .pv-code{flex:1; margin:0; overflow:auto; padding:16px; font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:pre; background:var(--panel); tab-size:2}
+  .pv-code.wrap{white-space:pre-wrap; word-break:break-word}
+  .hl-key{color:#7c3aed}.hl-str{color:#0a7d54}.hl-num{color:#b45309}.hl-com{color:#8b93a7;font-style:italic}.hl-tag{color:#2563eb}.hl-attr{color:#c2410c}
+  html[data-theme="dark"] .hl-key{color:#c4b5fd}
+  html[data-theme="dark"] .hl-str{color:#6ee7b7}
+  html[data-theme="dark"] .hl-num{color:#fcd34d}
+  html[data-theme="dark"] .hl-com{color:#7b8497}
+  html[data-theme="dark"] .hl-tag{color:#93c5fd}
+  html[data-theme="dark"] .hl-attr{color:#fdba74}
   @media print{
     .bar,.foot,.toast,.help,.pager,.icon-btn{display:none !important}
     .q{break-inside:avoid; box-shadow:none; border-color:#ccc}
@@ -271,6 +304,35 @@
       <button id="settingsClear" class="btn ghost" type="button">Clear</button>
       <button id="settingsClose" class="btn ghost" type="button">Close</button>
       <button id="settingsSave" class="btn primary" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="previewPanel" class="help" hidden role="dialog" aria-modal="true" aria-label="Example">
+  <div class="help-card preview-card">
+    <div class="pv-head">
+      <h3 id="pvTitle">Example</h3>
+      <button id="pvClose" class="icon-btn" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="pv-tools">
+      <div class="pv-tabs" role="tablist">
+        <button class="pv-tab" data-pv-tab="preview" type="button" role="tab">Preview</button>
+        <button class="pv-tab" data-pv-tab="code" type="button" role="tab">Code</button>
+      </div>
+      <div class="pv-devices" id="pvDevices" hidden>
+        <button class="pv-dev on" data-pv-width="desktop" type="button">Desktop</button>
+        <button class="pv-dev" data-pv-width="tablet" type="button">Tablet</button>
+        <button class="pv-dev" data-pv-width="mobile" type="button">Mobile</button>
+      </div>
+      <div class="pv-actions">
+        <button id="pvWrap" class="pv-act" type="button">Wrap</button>
+        <button id="pvNewTab" class="pv-act" type="button">New tab</button>
+        <button id="pvCopy" class="pv-act" type="button">Copy</button>
+      </div>
+    </div>
+    <div class="pv-body">
+      <div class="pv-pane" data-pv-pane="preview" hidden><iframe id="pvFrame" class="pv-device" data-w="desktop" sandbox="allow-scripts" title="Example preview"></iframe></div>
+      <div class="pv-pane" data-pv-pane="code" hidden><pre class="pv-code"><code id="pvCode"></code></pre></div>
     </div>
   </div>
 </div>

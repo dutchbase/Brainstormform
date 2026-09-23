@@ -29,6 +29,49 @@ export const QUESTION_TYPES = [
 const TYPES = new Set(QUESTION_TYPES);
 const CHOICE_TYPES = new Set(['single', 'multi', 'visual']);
 
+export const PREVIEW_LANGUAGES = ['html', 'svg', 'markdown', 'css', 'js', 'ts', 'tsx', 'jsx', 'vue', 'svelte', 'text'];
+const RENDERABLE_LANGUAGES = new Set(['html', 'svg', 'markdown']);
+const PREVIEW_EXT_LANGUAGE = {
+  '.html': 'html', '.htm': 'html', '.svg': 'svg', '.md': 'markdown', '.markdown': 'markdown',
+  '.css': 'css', '.js': 'js', '.mjs': 'js', '.ts': 'ts', '.tsx': 'tsx', '.jsx': 'jsx',
+  '.vue': 'vue', '.svelte': 'svelte', '.json': 'text', '.txt': 'text',
+};
+
+function languageFromPath(src) {
+  const ext = String(src == null ? '' : src).toLowerCase().match(/\.[a-z0-9]+$/);
+  return (ext && PREVIEW_EXT_LANGUAGE[ext[0]]) || 'text';
+}
+
+function normalizePreview(input, where) {
+  let obj;
+  if (typeof input === 'string') obj = { code: input };
+  else if (input && typeof input === 'object' && !Array.isArray(input)) obj = input;
+  else throw new SpecError(`${where}.preview must be a string or an object.`);
+
+  const language = obj.language == null ? (obj.src != null ? languageFromPath(obj.src) : 'html') : String(obj.language);
+  if (!PREVIEW_LANGUAGES.includes(language)) {
+    throw new SpecError(`${where}.preview.language "${language}" is invalid. Allowed: ${PREVIEW_LANGUAGES.join(', ')}.`);
+  }
+  if (obj.code != null && obj.src != null) {
+    throw new SpecError(`${where}.preview cannot have both "code" and "src".`);
+  }
+  if (obj.code == null && obj.src == null) {
+    throw new SpecError(`${where}.preview needs "code" or "src".`);
+  }
+  const renderable = RENDERABLE_LANGUAGES.has(language);
+  const render = obj.render === undefined ? renderable : obj.render === true;
+  if (render && !renderable) {
+    throw new SpecError(`${where}.preview.language "${language}" cannot be rendered; only ${[...RENDERABLE_LANGUAGES].join(', ')} can. Set "render": false or drop it.`);
+  }
+  const out = { language, render };
+  if (obj.code != null) out.code = String(obj.code);
+  else out.src = String(obj.src);
+  if (obj.title != null) out.title = String(obj.title);
+  if (obj.alwaysOpen === true) out.alwaysOpen = true;
+  if (obj.theme === true) out.theme = true;
+  return out;
+}
+
 function normalizeOptions(input, where) {
   return input.options.map((opt, i) => {
     const value = opt && typeof opt === 'object' ? opt.value : opt;
@@ -40,6 +83,9 @@ function normalizeOptions(input, where) {
       const image = opt && typeof opt === 'object' ? opt.image : undefined;
       if (image == null) throw new SpecError(`${where}.options[${i}].image is required for type "visual".`);
       out.image = String(image);
+    }
+    if (opt && typeof opt === 'object' && opt.preview !== undefined) {
+      out.preview = normalizePreview(opt.preview, `${where}.options[${i}]`);
     }
     return out;
   });
@@ -166,6 +212,8 @@ function normalizeQuestion(input, where, state) {
     q.maxFiles = Number.isFinite(input.maxFiles) ? Math.max(1, Math.floor(input.maxFiles)) : q.multiple ? 5 : 1;
   }
 
+  if (input.preview !== undefined) q.preview = normalizePreview(input.preview, where);
+
   state.seen.add(id);
   return q;
 }
@@ -186,6 +234,7 @@ function normalizeCategory(input, where, state, { requireTitle }) {
   };
   const intro = input.intro !== undefined ? input.intro : input.description;
   if (intro != null) out.intro = String(intro);
+  if (input.preview !== undefined) out.preview = normalizePreview(input.preview, where);
   return out;
 }
 
@@ -308,12 +357,26 @@ export const SPEC_SCHEMA = {
           title: { type: 'string' },
           intro: { type: 'string', description: 'Markdown, shown under the heading' },
           description: { type: 'string', description: 'Alias for intro' },
+          preview: { $ref: '#/definitions/preview' },
           questions: { type: 'array', minItems: 1, items: { $ref: '#/definitions/question' } },
         },
       },
     },
   },
   definitions: {
+    preview: {
+      type: 'object',
+      description: 'A code/design example shown as a View example button or inline; question, category or option level',
+      properties: {
+        language: { enum: PREVIEW_LANGUAGES },
+        title: { type: 'string', description: 'Button/tab label' },
+        code: { type: 'string', description: 'Inline source' },
+        src: { type: 'string', description: 'Path to a local source file, relative to the ask dir' },
+        render: { type: 'boolean', description: 'Show a live preview; only html, svg and markdown can render' },
+        alwaysOpen: { type: 'boolean', description: 'Show the preview inline instead of behind a button' },
+        theme: { type: 'boolean', description: 'Follow the form dark/light mode in the preview' },
+      },
+    },
     question: {
       type: 'object',
       required: ['type', 'label'],
@@ -324,6 +387,7 @@ export const SPEC_SCHEMA = {
         intro: { type: 'string', description: 'Markdown help text' },
         explanation: { type: 'string', description: 'Markdown context shown with the question; supports links and images' },
         content: { type: 'string', description: 'Alias for explanation' },
+        preview: { $ref: '#/definitions/preview' },
         required: { type: 'boolean', default: false },
         placeholder: { type: 'string' },
         default: {},
@@ -364,6 +428,7 @@ export const SPEC_SCHEMA = {
               label: { type: 'string' },
               description: { type: 'string' },
               image: { type: 'string', description: 'visual only: https URL or local file path' },
+              preview: { $ref: '#/definitions/preview' },
             },
           },
         },
@@ -432,9 +497,19 @@ const EXAMPLE = {
           id: 'mood',
           type: 'visual',
           label: 'Pick a visual direction',
+          preview: {
+            language: 'html',
+            title: 'Hero mockup',
+            code: '<section style="padding:40px;font-family:system-ui"><h1>Ship it</h1></section>',
+          },
           options: [
             { value: 'minimal', label: 'Minimal', image: 'https://placehold.co/320x200?text=Minimal' },
-            { value: 'bold', label: 'Bold', image: 'https://placehold.co/320x200?text=Bold' },
+            {
+              value: 'bold',
+              label: 'Bold',
+              image: 'https://placehold.co/320x200?text=Bold',
+              preview: { language: 'ts', render: false, code: 'type Mood = "bold";' },
+            },
           ],
         },
         {
@@ -483,6 +558,13 @@ Question:
 - label (required), id (auto q1..qN), required?
 - intro (Markdown, short help), explanation (Markdown context block with links
   and images, e.g. ![diagram](https://…/d.png) or a local file under the ask dir)
+- preview: a code or design example. { language, code | src, render?, title?,
+  alwaysOpen?, theme? }. Attach it to a question, a category, or a single option.
+  Only html, svg and markdown render live; css/js/ts/tsx/jsx/vue/svelte/text show
+  as highlighted code (setting render:true on those is an error). The user gets a
+  "View example" button that opens a Preview/Code pop-up with a Desktop/Tablet/
+  Mobile toggle; alwaysOpen shows it inline instead. theme:true makes the preview
+  follow the form's dark/light mode. src is a local file path like images.
 - showIf: { question, equals | not | in | contains | answered } to show conditionally
 - then: { question, equals | not | in | contains | answered, add: [...] } appends
   follow-up questions to the live form the moment the condition first matches

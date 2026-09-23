@@ -40,6 +40,7 @@ Every question needs a `type` and a `label`.
 | `intro` | all | short Markdown help under the label |
 | `explanation` | all | Markdown context block; supports links and images |
 | `content` | all | alias for `explanation` |
+| `preview` | all, plus category and option | a code/design example (below) |
 | `placeholder` | text, number | grey hint text |
 | `showIf` | all | conditional visibility (below) |
 | `then` | all | append follow-ups when an answer matches (below) |
@@ -128,6 +129,54 @@ browser never reads arbitrary paths.
 ```jsonc
 { "explanation": "Here is the layout we sketched:\n\n![wireframe](./wireframe.png)" }
 ```
+
+## Code & design examples (`preview`)
+
+An agent can attach a code snippet or a design example so the user can view it as
+**code** or as a **live rendered preview**. `preview` can sit on a question, a
+whole category, or a single answer option:
+
+```jsonc
+{
+  "id": "layout",
+  "type": "visual",
+  "label": "Pick a layout",
+  "preview": {
+    "language": "html",
+    "title": "Hero mockup",
+    "code": "<section style=\"padding:40px\"><h1>Ship it</h1></section>"
+  },
+  "options": [
+    { "value": "a", "image": "./a.png", "preview": { "language": "tsx", "render": false, "code": "export const A = () => <h1>A</h1>;" } }
+  ]
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `language` | `html`, `svg`, `markdown`, `css`, `js`, `ts`, `tsx`, `jsx`, `vue`, `svelte`, `text`. Defaults to `html`, or inferred from a `src` file extension. |
+| `code` | Inline source. Required unless `src` is given. |
+| `src` | Path to a local source file, resolved like images (relative to the ask dir, must stay inside it). |
+| `render` | Live preview. Only `html`, `svg` and `markdown` can render; defaults to `true` for those, `false` otherwise. `"render": true` on any other language is an error. |
+| `title` | Label for the button and the pop-up heading. |
+| `alwaysOpen` | Show the preview inline under the question instead of behind the button. |
+| `theme` | Let the preview follow the form's dark/light mode. |
+
+A plain string is shorthand for an HTML snippet: `"preview": "<h1>hi</h1>"`.
+
+How it behaves:
+
+- By default the user sees a **View example** button. It opens a pop-up with a
+  **Preview** and a **Code** tab, a Desktop / Tablet / Mobile width toggle, and
+  Copy, Wrap and Open-in-new-tab actions.
+- Rendered previews run in a **sandboxed iframe** (a sealed box with its own
+  origin, so a snippet can never touch the form or its data). HTML, SVG and
+  Markdown render; CSS, JS, TypeScript, React/Vue/Svelte show as highlighted code
+  only — no compiler is bundled, so keep designs in HTML/CSS.
+- Previews are allowed to load internet images and fonts, and include a CSS reset,
+  a system font stack and Tailwind-style utilities (via the Tailwind Play CDN, so
+  an offline machine simply loses the utility classes).
+- Markdown uses the same renderer as `intro`/`explanation`; raw HTML stays escaped.
 
 ## Answers output
 

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 import { readJson, writeJsonAtomic, sessionDir, openBrowser, readProfile, writeProfile, clearProfile, profilePath } from './session.mjs';
 import { appendFragment, allQuestions, SpecError, normalizeProfile, profileFromAnswers } from './schema.mjs';
-import { evaluateShowIf } from './render.mjs';
+import { evaluateShowIf, renderMarkdown } from './render.mjs';
 import { parseArgs } from './args.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,21 +70,61 @@ function readBody(req, limit) {
 }
 
 const IMAGE_EXT = new Set(Object.keys(MIME));
+const PREVIEW_EXT = new Set(['.html', '.htm', '.svg', '.md', '.markdown', '.css', '.js', '.mjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte', '.txt', '.json']);
+const PREVIEW_CSP =
+  "sandbox allow-scripts; default-src 'none'; img-src https: data:; media-src https: data:; " +
+  "style-src 'unsafe-inline' https:; font-src https: data:; script-src 'unsafe-inline' https:; " +
+  "connect-src https:; base-uri 'none'; form-action 'none'";
+const PREVIEW_HELPERS =
+  '<style>*{box-sizing:border-box}body{margin:0;padding:16px;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;color:#111;background:#fff}svg{max-width:100%;height:auto}</style>' +
+  '<script src="https://cdn.tailwindcss.com"></script>';
+
+function previewDoc(language, code) {
+  if (language === 'svg') {
+    return '<!doctype html><html><head><meta charset="utf-8">' + PREVIEW_HELPERS +
+      '</head><body style="display:grid;place-items:center;min-height:100vh">' + code + '</body></html>';
+  }
+  if (language === 'markdown') {
+    return '<!doctype html><html><head><meta charset="utf-8">' + PREVIEW_HELPERS +
+      '</head><body>' + renderMarkdown(code) + '</body></html>';
+  }
+  if (/<html[\s>]|<!doctype/i.test(code)) {
+    return /<head[\s>]/i.test(code) ? code.replace(/<head([^>]*)>/i, (m) => m + PREVIEW_HELPERS) : PREVIEW_HELPERS + code;
+  }
+  return '<!doctype html><html><head><meta charset="utf-8">' + PREVIEW_HELPERS + '</head><body>' + code + '</body></html>';
+}
+
+function withTheme(html, dark) {
+  if (!dark) return html;
+  const style = '<style>:root{color-scheme:dark}html,body{background:#0c0e14;color:#edf0f7}</style>';
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, style + '</body>') : html + style;
+}
 
 function buildAssets(spec, token) {
   const root = process.cwd();
   const clientSpec = JSON.parse(JSON.stringify(spec));
   const assets = [];
+  const previews = [];
   const assetUrl = (file) => {
     assets.push(file);
     return `/s/${token}/api/asset/${assets.length - 1}`;
   };
+  const insideRoot = (resolved) => {
+    const rel = path.relative(root, resolved);
+    return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
   const localImage = (src) => {
     if (/^(https?:|data:image\/|\/)/i.test(src)) return null;
     const resolved = path.resolve(root, src);
-    const rel = path.relative(root, resolved);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    if (!insideRoot(resolved)) return null;
     if (!IMAGE_EXT.has(path.extname(resolved).toLowerCase())) return null;
+    return resolved;
+  };
+  const localPreview = (src) => {
+    if (/^(https?:|data:|\/)/i.test(src)) return null;
+    const resolved = path.resolve(root, src);
+    if (!insideRoot(resolved)) return null;
+    if (!PREVIEW_EXT.has(path.extname(resolved).toLowerCase())) return null;
     return resolved;
   };
   const rewriteImages = (text) => {
@@ -94,21 +134,48 @@ function buildAssets(spec, token) {
       return file ? `![${alt}](${assetUrl(file)})` : match;
     });
   };
+  const normalizePreviewField = (preview) => {
+    if (!preview || typeof preview !== 'object') return null;
+    let code = preview.code;
+    if (code == null && preview.src) {
+      const file = localPreview(preview.src);
+      if (!file) return null;
+      try {
+        code = fs.readFileSync(file, 'utf8');
+      } catch {
+        return null;
+      }
+    }
+    if (code == null) return null;
+    const out = { language: preview.language, render: preview.render === true, code: String(code) };
+    if (preview.title) out.title = preview.title;
+    if (preview.alwaysOpen) out.alwaysOpen = true;
+    if (preview.theme) out.theme = true;
+    if (out.render) {
+      previews.push({ html: previewDoc(preview.language, out.code) });
+      out.url = `/s/${token}/api/preview/${previews.length - 1}`;
+    }
+    return out;
+  };
   for (const cat of clientSpec.categories) {
     if (cat.intro) cat.intro = rewriteImages(cat.intro);
+    if (cat.preview) cat.preview = normalizePreviewField(cat.preview);
     for (const q of cat.questions) {
       if (q.intro) q.intro = rewriteImages(q.intro);
       if (q.explanation) q.explanation = rewriteImages(q.explanation);
-      if (q.type === 'visual' && Array.isArray(q.options)) {
+      if (q.preview) q.preview = normalizePreviewField(q.preview);
+      if (Array.isArray(q.options)) {
         for (const option of q.options) {
-          if (!option.image) continue;
-          const file = localImage(option.image);
-          if (file) option.image = assetUrl(file);
+          if (q.type === 'visual' && option.image) {
+            const file = localImage(option.image);
+            if (file) option.image = assetUrl(file);
+          }
+          if (option.preview) option.preview = normalizePreviewField(option.preview);
         }
       }
     }
   }
-  return { assets, clientSpec };
+  return { assets, previews, clientSpec };
 }
 
 export async function startServer({
@@ -238,7 +305,7 @@ export async function startServer({
         'cache-control': 'no-store',
         'x-content-type-options': 'nosniff',
         'content-security-policy':
-          "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data: https:; connect-src 'self'; form-action 'none'; base-uri 'none'",
+          "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data: https:; frame-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'",
       });
       res.end(uiHtml.replaceAll('__BF_BASE_URL__', `/s/${token}`));
       return;
@@ -366,6 +433,23 @@ export async function startServer({
         'cache-control': 'no-store',
       });
       fs.createReadStream(file).pipe(res);
+      return;
+    }
+
+    if (action === 'preview' && req.method === 'GET') {
+      const entry = built.previews[Number(rest[2])];
+      if (!entry) {
+        sendJson(res, 404, { error: 'unknown preview' });
+        return;
+      }
+      const dark = parsed.searchParams.get('theme') === 'dark';
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': PREVIEW_CSP,
+      });
+      res.end(withTheme(entry.html, dark));
       return;
     }
 

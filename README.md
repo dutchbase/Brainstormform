@@ -41,6 +41,9 @@ Brainstormform is what you use when the questions are the point.
   for it.
 - **A note on any answer.** When none of the options quite fit, add free-text
   context to any question — even one you skip.
+- **Code and design examples.** Attach a snippet or a design mockup to a
+  question, a section or an answer option; open it to see it as code or as a live,
+  sandboxed preview sized for desktop, tablet and phone.
 - **Live follow-ups.** The agent reads your answers as you go and can add new
   questions to the same form while you are still filling it in.
 - **Answers as JSON.** Typed and clean, straight into the agent's context. Or ask

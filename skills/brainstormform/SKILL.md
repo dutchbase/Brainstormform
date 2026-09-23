@@ -116,6 +116,8 @@ session.
 
 Prefer MCP over the CLI so you also receive resource-updated notifications when
 the user answers. Read the `brainstormform://guide` resource for the full format.
+You can also attach a code or design example to a question, a category or an
+option with `preview` — see "Show, don't just tell" below.
 
 ## Question format
 
@@ -130,6 +132,25 @@ makes it easy to answer: a sentence on why it matters, `[links](https://…)`
 under the directory you run `ask` from, e.g. `![mockup](./mock.png)` — generate a
 mockup or take a screenshot into that directory and reference it. The older name
 `content` is an alias for `explanation`.
+
+## Show, don't just tell
+
+When the answer is easier to judge by seeing it, attach a `preview` — a code or
+design example — to a question, a category, or a single option:
+
+```jsonc
+{ "preview": { "language": "html", "title": "Hero mockup",
+  "code": "<section style=\"padding:40px\"><h1>Ship it</h1></section>" } }
+```
+
+The user gets a **View example** button that opens a Preview/Code pop-up, with a
+Desktop/Tablet/Mobile toggle so they can check the design at each size. Use it to
+propose two or three designs and let the user pick — put a `preview` on each
+`visual` option. Prefer `html` (and `svg`, `markdown`) because those render live;
+`css`, `js`, `ts`, `tsx`, `jsx`, `vue` and `svelte` show as code only, so build
+designs in HTML and offer to port them afterwards. `code` can be inline or a local
+`src` file. Add `"alwaysOpen": true` for a preview that should sit inline, and
+`"theme": true` to follow the form's dark/light mode.
 
 ## Quality rules
 
